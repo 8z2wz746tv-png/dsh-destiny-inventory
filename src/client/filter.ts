@@ -1,13 +1,16 @@
 import type { ItemRow } from '../mcp/types'
 
 /**
- * Pure view logic for the inventory grid: grouping, filtering and sorting.
+ * Pure view logic for the inventory grid.
  *
- * Kept out of the component so every rule is unit-testable without a DOM, and
- * so a wrong filter never hides behind React state.
+ * The shape follows Destiny Item Manager's desktop layout rather than a
+ * location switcher: `DesktopStores.tsx` walks categories, then buckets, and
+ * `StoreBuckets.tsx` renders each bucket as ONE ROW with a cell per store —
+ * characters at a fixed width, the vault taking the rest. That is why two copies
+ * of the same gun can be compared left to right without changing pages.
  */
 
-/** How items are ordered inside one bucket. */
+/** How items are ordered inside one cell. */
 export type SortKey = 'power-desc' | 'name-asc' | 'type-asc'
 
 /** Lock-state filter. */
@@ -23,52 +26,63 @@ export interface InventoryFilters {
   /** Localized item type; `` means every type. */
   type: string
   lock: LockFilter
-  /** Item location; `` means every location. */
-  location: string
   category: CategoryFilter
   sort: SortKey
 }
 
-/**
- * Default view: the vault, ordered by power.
- *
- * The vault is 1295 of 1922 items, so it is both the thing worth opening first
- * and the reason a single stacked list of every location does not work.
- */
+/** Default view: everything, ordered by power. */
 export const DEFAULT_FILTERS: InventoryFilters = {
   search: '',
   type: '',
   lock: 'all',
-  location: 'vault',
   category: 'all',
   sort: 'power-desc',
 }
 
-/** One item-type group, e.g. 手炮 or 腿部护甲. */
-export interface TypeGroup {
+/** The stores that get their own column, in the order the row lays them out. */
+export const STORE_COLUMNS = [
+  { location: 'hunter', label: '猎人' },
+  { location: 'warlock', label: '术士' },
+  { location: 'titan', label: '泰坦' },
+  { location: 'vault', label: '仓库' },
+] as const
+
+/** One store's slice of a row; `items` is empty when that store has none. */
+export interface StoreCell {
+  location: string
   label: string
+  /** True for the flexible vault column. */
+  flex: boolean
   items: ItemRow[]
 }
 
-/**
- * One kind section: 武器 / 防具 / 杂项.
- *
- * Grouping by the tool's `bucket_type` is useless inside the vault — all 1295
- * vault items report `Vault (General)` — so the split is by item type, which is
- * also how DIM lays a vault out.
- */
-export interface KindSection {
-  kind: 'weapon' | 'armor' | 'other'
+/** One row: a single item type across every store. */
+export interface TypeRow {
   label: string
+  cells: StoreCell[]
   itemCount: number
-  groups: TypeGroup[]
 }
 
-/** Section order and labels, matching the game's own tabs. */
-const KIND_ORDER: { kind: KindSection['kind']; label: string; rank: number }[] = [
-  { kind: 'weapon', label: '武器', rank: 1 },
-  { kind: 'armor', label: '防具', rank: 2 },
-  { kind: 'other', label: '杂项', rank: 3 },
+/** One category section: 武器 / 防具 / 杂项 / 账号 / 邮政官. */
+export interface CategorySection {
+  id: string
+  label: string
+  itemCount: number
+  rows: TypeRow[]
+  /**
+   * Account-wide and postmaster items belong to no single store, so their rows
+   * carry one full-width cell instead of the four-column store layout.
+   */
+  fullWidth: boolean
+}
+
+/** Display order and labels for the sections. */
+const SECTIONS: { id: string; label: string; rank: number }[] = [
+  { id: 'weapon', label: '武器', rank: 1 },
+  { id: 'armor', label: '防具', rank: 2 },
+  { id: 'other', label: '杂项', rank: 3 },
+  { id: 'profile', label: '账号', rank: 4 },
+  { id: 'postmaster', label: '邮政官', rank: 5 },
 ]
 
 /** Type order inside a section, mirroring how the game lists a vault. */
@@ -87,14 +101,11 @@ function typeRank(label: string): number {
   return index === -1 ? TYPE_ORDER.length : index
 }
 
-/** Display order and labels for locations; unknown locations sort last. */
-const LOCATION_ORDER: Record<string, { label: string; rank: number }> = {
-  hunter: { label: '猎人', rank: 1 },
-  warlock: { label: '术士', rank: 2 },
-  titan: { label: '泰坦', rank: 3 },
-  vault: { label: '仓库', rank: 4 },
-  profile: { label: '账号', rank: 5 },
-  postmaster: { label: '邮政官', rank: 6 },
+/** Which section an item belongs to. */
+function sectionOf(item: ItemRow): string {
+  if (item.location === 'profile') return 'profile'
+  if (item.location === 'postmaster') return 'postmaster'
+  return item.kind === 'weapon' ? 'weapon' : item.kind === 'armor' ? 'armor' : 'other'
 }
 
 /**
@@ -104,7 +115,6 @@ const LOCATION_ORDER: Record<string, { label: string; rank: number }> = {
  */
 export function matchesFilters(item: ItemRow, filters: InventoryFilters): boolean {
   if (filters.type !== '' && item.type !== filters.type) return false
-  if (filters.location !== '' && item.location !== filters.location) return false
   if (filters.category !== 'all' && item.kind !== filters.category) return false
   if (filters.lock === 'locked' && !item.locked) return false
   if (filters.lock === 'unlocked' && item.locked) return false
@@ -126,39 +136,63 @@ export function compareItems(a: ItemRow, b: ItemRow, sort: SortKey): number {
 }
 
 /**
- * Apply filters and sort, then group into location → bucket sections.
+ * Build the DIM-shaped page: section → type row → one cell per store.
  * @param items - the full snapshot rows.
  * @param filters - current toolbar state.
  */
-export function buildSections(items: ItemRow[], filters: InventoryFilters): KindSection[] {
+export function buildSections(items: ItemRow[], filters: InventoryFilters): CategorySection[] {
   const visible = items.filter((item) => matchesFilters(item, filters))
-  const byKind = new Map<KindSection['kind'], ItemRow[]>()
+  const bySection = new Map<string, Map<string, ItemRow[]>>()
   for (const item of visible) {
-    const bucket = byKind.get(item.kind)
-    if (bucket === undefined) byKind.set(item.kind, [item])
+    const section = sectionOf(item)
+    let byType = bySection.get(section)
+    if (byType === undefined) {
+      byType = new Map<string, ItemRow[]>()
+      bySection.set(section, byType)
+    }
+    const label = item.type === '' ? '未分类' : item.type
+    const bucket = byType.get(label)
+    if (bucket === undefined) byType.set(label, [item])
     else bucket.push(item)
   }
-  const sections: KindSection[] = []
-  for (const entry of KIND_ORDER) {
-    const rows = byKind.get(entry.kind)
-    if (rows === undefined || rows.length === 0) continue
-    const byType = new Map<string, ItemRow[]>()
-    for (const row of rows) {
-      const label = row.type === '' ? '未分类' : row.type
-      const group = byType.get(label)
-      if (group === undefined) byType.set(label, [row])
-      else group.push(row)
-    }
-    const groups = [...byType.entries()]
+
+  const sections: CategorySection[] = []
+  for (const meta of SECTIONS) {
+    const byType = bySection.get(meta.id)
+    if (byType === undefined) continue
+    const fullWidth = meta.id === 'profile' || meta.id === 'postmaster'
+    const rows: TypeRow[] = [...byType.entries()]
       .sort(
         ([left], [right]) =>
           typeRank(left) - typeRank(right) || left.localeCompare(right, 'zh-Hans-CN'),
       )
-      .map(([label, groupRows]) => ({
-        label,
-        items: [...groupRows].sort((a, b) => compareItems(a, b, filters.sort)),
-      }))
-    sections.push({ kind: entry.kind, label: entry.label, itemCount: rows.length, groups })
+      .map(([label, rows]) => {
+        const sorted = [...rows].sort((a, b) => compareItems(a, b, filters.sort))
+        if (fullWidth) {
+          const items = sorted
+          return {
+            label,
+            itemCount: items.length,
+            cells: [{ location: meta.id, label: meta.label, flex: true, items }],
+          }
+        }
+        const cells: StoreCell[] = STORE_COLUMNS.map((column) => ({
+          location: column.location,
+          label: column.label,
+          flex: column.location === 'vault',
+          items: sorted.filter((item) => item.location === column.location),
+        }))
+        // A type that only one store holds still lays out all four columns, so
+        // the columns stay aligned down the whole page.
+        return { label, itemCount: sorted.length, cells }
+      })
+    sections.push({
+      id: meta.id,
+      label: meta.label,
+      itemCount: rows.reduce((sum, row) => sum + row.itemCount, 0),
+      rows,
+      fullWidth,
+    })
   }
   return sections
 }
@@ -173,33 +207,24 @@ export function availableTypes(items: ItemRow[]): string[] {
   return [...types].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
 }
 
-/**
- * Item counts per location, in display order — the numbers on the location tabs.
- * @param items - the full snapshot rows.
- */
+/** Item counts per location, for the store header strip. */
 export function locationCounts(items: ItemRow[]): { value: string; label: string; count: number }[] {
+  const grouped: { value: string; label: string; rank: number }[] = [
+    { value: 'hunter', label: '猎人', rank: 1 },
+    { value: 'warlock', label: '术士', rank: 2 },
+    { value: 'titan', label: '泰坦', rank: 3 },
+    { value: 'vault', label: '仓库', rank: 4 },
+    { value: 'profile', label: '账号', rank: 5 },
+    { value: 'postmaster', label: '邮政官', rank: 6 },
+  ]
   const counts = new Map<string, number>()
   for (const item of items) counts.set(item.location, (counts.get(item.location) ?? 0) + 1)
-  return [...counts.entries()]
-    .map(([value, count]) => ({ value, label: LOCATION_ORDER[value]?.label ?? value, count }))
-    .sort(
-      (left, right) =>
-        (LOCATION_ORDER[left.value]?.rank ?? 99) - (LOCATION_ORDER[right.value]?.rank ?? 99) ||
-        left.value.localeCompare(right.value),
-    )
-}
-
-/**
- * Distinct locations present in the snapshot, in display order.
- * @param items - the full snapshot rows.
- */
-export function availableLocations(items: ItemRow[]): { value: string; label: string }[] {
-  const seen = new Set<string>()
-  for (const item of items) seen.add(item.location)
-  return [...seen]
-    .map((location) => ({ value: location, label: LOCATION_ORDER[location]?.label ?? location }))
-    .sort(
-      (left, right) =>
-        (LOCATION_ORDER[left.value]?.rank ?? 99) - (LOCATION_ORDER[right.value]?.rank ?? 99),
-    )
+  return grouped
+    .map((entry) => ({ value: entry.value, label: entry.label, count: counts.get(entry.value) ?? 0 }))
+    .filter((entry) => entry.count > 0)
+    .sort((left, right) => {
+      const leftRank = grouped.find((entry) => entry.value === left.value)?.rank ?? 99
+      const rightRank = grouped.find((entry) => entry.value === right.value)?.rank ?? 99
+      return leftRank - rightRank
+    })
 }

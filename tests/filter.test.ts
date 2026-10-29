@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ItemRow } from '../src/mcp/types'
 import {
   DEFAULT_FILTERS,
-  availableLocations,
+  STORE_COLUMNS,
   availableTypes,
   buildSections,
   compareItems,
@@ -19,7 +19,7 @@ function row(overrides: Partial<ItemRow>): ItemRow {
     name: '测试',
     kind: 'weapon',
     type: '手炮',
-    bucket: 'Kinetic Weapons',
+    bucket: 'Vault (General)',
     power: 500,
     equipped: false,
     locked: false,
@@ -53,23 +53,14 @@ describe('matchesFilters', () => {
   })
 
   it('splits weapons from armor and from everything else', () => {
-    const weapon = row({ kind: 'weapon' })
-    const armor = row({ kind: 'armor' })
-    const misc = row({ kind: 'other' })
-    expect(matchesFilters(weapon, { ...DEFAULT_FILTERS, category: 'weapon' })).toBe(true)
-    expect(matchesFilters(armor, { ...DEFAULT_FILTERS, category: 'weapon' })).toBe(false)
-    expect(matchesFilters(misc, { ...DEFAULT_FILTERS, category: 'other' })).toBe(true)
-    expect(matchesFilters(weapon, { ...DEFAULT_FILTERS, category: 'all' })).toBe(true)
+    expect(matchesFilters(row({ kind: 'weapon' }), { ...DEFAULT_FILTERS, category: 'weapon' })).toBe(true)
+    expect(matchesFilters(row({ kind: 'armor' }), { ...DEFAULT_FILTERS, category: 'weapon' })).toBe(false)
+    expect(matchesFilters(row({ kind: 'other' }), { ...DEFAULT_FILTERS, category: 'other' })).toBe(true)
   })
 
-  it('opens on the vault, which is where most of the account lives', () => {
-    expect(DEFAULT_FILTERS.location).toBe('vault')
-  })
-
-  it('filters by type and location together', () => {
-    const item = row({ type: '手炮', location: 'hunter' })
-    expect(matchesFilters(item, { ...DEFAULT_FILTERS, type: '手炮', location: 'hunter' })).toBe(true)
-    expect(matchesFilters(item, { ...DEFAULT_FILTERS, type: '手炮', location: 'vault' })).toBe(false)
+  it('filters by type', () => {
+    expect(matchesFilters(row({ type: '手炮' }), { ...DEFAULT_FILTERS, type: '手炮' })).toBe(true)
+    expect(matchesFilters(row({ type: '手炮' }), { ...DEFAULT_FILTERS, type: '自动步枪' })).toBe(false)
   })
 })
 
@@ -90,35 +81,61 @@ describe('compareItems', () => {
 })
 
 describe('buildSections', () => {
-  it('splits weapons from armor before splitting by type', () => {
+  it('lays out one row per type with a cell for every store', () => {
+    const sections = buildSections([row({ id: 'a' })], DEFAULT_FILTERS)
+    expect(sections[0].label).toBe('武器')
+    const rowData = sections[0].rows[0]
+    expect(rowData.label).toBe('手炮')
+    expect(rowData.cells.map((cell) => cell.location)).toEqual(
+      STORE_COLUMNS.map((column) => column.location),
+    )
+    expect(rowData.cells.filter((cell) => cell.flex).map((cell) => cell.location)).toEqual(['vault'])
+  })
+
+  it('puts each item in its own store cell, not the first one', () => {
     const sections = buildSections(
       [
-        row({ id: 'a', kind: 'other', type: '消耗品' }),
-        row({ id: 'b', kind: 'weapon', type: '手炮' }),
-        row({ id: 'c', kind: 'armor', type: '腿部护甲' }),
+        row({ id: 'h', location: 'hunter' }),
+        row({ id: 'v', location: 'vault' }),
+        row({ id: 'v2', location: 'vault' }),
       ],
+      DEFAULT_FILTERS,
+    )
+    const cells = sections[0].rows[0].cells
+    expect(cells.find((cell) => cell.location === 'hunter')?.items.map((i) => i.id)).toEqual(['h'])
+    expect(cells.find((cell) => cell.location === 'vault')?.items.map((i) => i.id)).toEqual(['v', 'v2'])
+  })
+
+  it('keeps empty store cells so the columns stay aligned', () => {
+    const sections = buildSections([row({ id: 'v', location: 'vault' })], DEFAULT_FILTERS)
+    expect(sections[0].rows[0].cells).toHaveLength(STORE_COLUMNS.length)
+    expect(sections[0].rows[0].cells.filter((cell) => cell.items.length === 0)).toHaveLength(3)
+  })
+
+  it('orders sections weapons, then armor, then the rest', () => {
+    const sections = buildSections(
+      [row({ id: 'c', kind: 'other', type: '消耗品' }), row({ id: 'a', kind: 'armor', type: '腿部护甲' }), row({ id: 'b' })],
       DEFAULT_FILTERS,
     )
     expect(sections.map((section) => section.label)).toEqual(['武器', '防具', '杂项'])
-    expect(sections[0].groups.map((group) => group.label)).toEqual(['手炮'])
   })
 
-  it('groups the vault by item type, because the vault bucket is one bucket', () => {
-    // All vault items report bucket "Vault (General)", which is why bucket
-    // grouping cannot work there and type grouping is used instead.
+  it('orders types the way the game lists them', () => {
     const sections = buildSections(
-      [
-        row({ id: 'a', type: '手炮' }),
-        row({ id: 'b', type: '自动步枪' }),
-        row({ id: 'c', type: '手炮' }),
-      ],
+      [row({ id: 'a', type: '刀剑' }), row({ id: 'b', type: '手炮' }), row({ id: 'c', type: '自动步枪' })],
       DEFAULT_FILTERS,
     )
-    expect(sections[0].groups.map((group) => [group.label, group.items.length])).toEqual([
-      ['手炮', 2],
-      ['自动步枪', 1],
-    ])
-    expect(sections[0].itemCount).toBe(3)
+    expect(sections[0].rows.map((r) => r.label)).toEqual(['手炮', '自动步枪', '刀剑'])
+  })
+
+  it('gives account-wide items one full-width cell instead of four', () => {
+    const sections = buildSections(
+      [row({ id: 'p', location: 'profile', kind: 'other', type: '消耗品' })],
+      DEFAULT_FILTERS,
+    )
+    const account = sections.find((section) => section.id === 'profile')
+    expect(account?.fullWidth).toBe(true)
+    expect(account?.rows[0].cells).toHaveLength(1)
   })
 
   it('drops filtered-out items from the counts, not just the render', () => {
@@ -127,7 +144,7 @@ describe('buildSections', () => {
       { ...DEFAULT_FILTERS, type: '手炮' },
     )
     expect(sections[0].itemCount).toBe(1)
-    expect(sections[0].groups).toHaveLength(1)
+    expect(sections[0].rows).toHaveLength(1)
   })
 
   it('returns nothing when every item is filtered out', () => {
@@ -135,8 +152,14 @@ describe('buildSections', () => {
   })
 })
 
-describe('locationCounts', () => {
-  it('counts per location and keeps the game order', () => {
+describe('availableTypes / locationCounts', () => {
+  it('lists each type once, sorted, skipping the untyped', () => {
+    const types = availableTypes([row({ type: '手炮' }), row({ type: '自动步枪' }), row({ type: '手炮' }), row({ type: '' })])
+    expect(types).toHaveLength(2)
+    expect(types).not.toContain('')
+  })
+
+  it('counts per location in store order and skips empty ones', () => {
     const counts = locationCounts([
       row({ location: 'vault' }),
       row({ location: 'vault' }),
@@ -148,24 +171,5 @@ describe('locationCounts', () => {
       { value: 'vault', label: '仓库', count: 2 },
       { value: 'profile', label: '账号', count: 1 },
     ])
-  })
-})
-
-describe('availableTypes / availableLocations', () => {
-  it('lists each type once, sorted', () => {
-    const types = availableTypes([
-      row({ type: '手炮' }),
-      row({ type: '自动步枪' }),
-      row({ type: '手炮' }),
-      row({ type: '' }),
-    ])
-    expect(types).toHaveLength(2)
-    expect(types).not.toContain('')
-  })
-
-  it('labels known locations and keeps unknown ones', () => {
-    const locations = availableLocations([row({ location: 'vault' }), row({ location: 'weird' })])
-    expect(locations[0]).toEqual({ value: 'vault', label: '仓库' })
-    expect(locations[1]).toEqual({ value: 'weird', label: 'weird' })
   })
 })
