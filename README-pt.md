@@ -1,0 +1,44 @@
+# dsh-destiny-inventory
+
+Um plugin do DeepSeek Harness (DSH) gerado com [`dsh-plugin-dev new`](https://github.com/PerryLink/dsh-plugin-guide).
+
+## Compatibility
+
+| Superfície | Estado |
+|---|---|
+| Harness | DeepSeek Harness `0.2.1-alpha.2` (npm `alpha`); `latest`/`next` = `0.2.0-rc.2` |
+| Node | `^22.19.0 || >=24.0.0` |
+| Plataformas | Todas (ESM puro; sem código nativo, sem rede) |
+
+## What it does
+
+Registra a ferramenta `destiny-inventory_echo`. Ao chamá-la, responde `<greeting>: <text>`, em que `<greeting>` vem da configuração do plugin e `<text>` é o argumento.
+
+## Install
+
+```sh
+pnpm pack
+dsh plugin --profile <name> add ./dsh-destiny-inventory-0.1.0.tgz
+dsh --profile <name> --dump-config | grep 'dsh-destiny-inventory'
+```
+
+## Configuration
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `greeting` | string | `Hello` | Prefixo da resposta echo |
+
+A configuração é validada pelo schema Schemastery `Config` em `src/config.ts`; nenhum ajuste fica fixo no código.
+
+## Development
+
+```sh
+pnpm install
+pnpm run typecheck
+pnpm test
+pnpm run build
+```
+
+## License
+
+[Apache License 2.0](LICENSE) © 2026 dsh-destiny-inventory contributors.
