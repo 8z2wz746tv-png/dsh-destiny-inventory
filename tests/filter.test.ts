@@ -112,12 +112,29 @@ describe('buildSections', () => {
     expect(sections[0].rows[0].cells.filter((cell) => cell.items.length === 0)).toHaveLength(3)
   })
 
-  it('orders sections weapons, then armor, then the rest', () => {
+  it("orders sections the way DIM's D2Categories does", () => {
     const sections = buildSections(
-      [row({ id: 'c', kind: 'other', type: '消耗品' }), row({ id: 'a', kind: 'armor', type: '腿部护甲' }), row({ id: 'b' })],
+      [
+        row({ id: 'p', location: 'postmaster', kind: 'other', type: '消耗品' }),
+        row({ id: 'g', kind: 'other', type: '术士分支职业' }),
+        row({ id: 'i', kind: 'other', type: '消耗品' }),
+        row({ id: 'a', kind: 'armor', type: '腿部护甲' }),
+        row({ id: 'w' }),
+      ],
       DEFAULT_FILTERS,
     )
-    expect(sections.map((section) => section.label)).toEqual(['武器', '防具', '杂项'])
+    expect(sections.map((section) => section.label)).toEqual(['邮政官', '武器', '护甲', '通用', '物品'])
+  })
+
+  it('puts subclass, artifact and ghost items in 通用, not 物品', () => {
+    const sections = buildSections(
+      [row({ id: 'a', kind: 'other', type: '神器' }), row({ id: 'b', kind: 'other', type: '机灵外壳' }), row({ id: 'c', kind: 'other', type: '消耗品' })],
+      DEFAULT_FILTERS,
+    )
+    const general = sections.find((section) => section.label === '通用')
+    const inventory = sections.find((section) => section.label === '物品')
+    expect(general?.itemCount).toBe(2)
+    expect(inventory?.itemCount).toBe(1)
   })
 
   it('orders types the way the game lists them', () => {
@@ -128,14 +145,14 @@ describe('buildSections', () => {
     expect(sections[0].rows.map((r) => r.label)).toEqual(['手炮', '自动步枪', '刀剑'])
   })
 
-  it('gives account-wide items one full-width cell instead of four', () => {
+  it('gives account-wide sections one full-width cell instead of four', () => {
     const sections = buildSections(
       [row({ id: 'p', location: 'profile', kind: 'other', type: '消耗品' })],
       DEFAULT_FILTERS,
     )
-    const account = sections.find((section) => section.id === 'profile')
-    expect(account?.fullWidth).toBe(true)
-    expect(account?.rows[0].cells).toHaveLength(1)
+    const inventory = sections.find((section) => section.id === 'inventory')
+    expect(inventory?.fullWidth).toBe(true)
+    expect(inventory?.rows[0].cells).toHaveLength(1)
   })
 
   it('drops filtered-out items from the counts, not just the render', () => {
