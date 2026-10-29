@@ -84,8 +84,10 @@ describe('toItemRow', () => {
     const row = toItemRow(RAW_ROW, exotics())
     expect(row).toEqual({
       id: 'hunter:6917530198634644757',
+      instanceId: '6917530198634644757',
       hash: 3718184802,
       name: '驱逐引擎',
+      kind: 'weapon',
       type: '榴弹发射器',
       bucket: 'Kinetic Weapons',
       power: 550,

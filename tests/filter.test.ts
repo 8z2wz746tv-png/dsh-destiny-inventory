@@ -13,8 +13,10 @@ import {
 function row(overrides: Partial<ItemRow>): ItemRow {
   return {
     id: 'i1',
+    instanceId: 'i1',
     hash: 1,
     name: '测试',
+    kind: 'weapon',
     type: '手炮',
     bucket: 'Kinetic Weapons',
     power: 500,

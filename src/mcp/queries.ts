@@ -33,7 +33,7 @@ interface ContentBlock {
  * @param read - read identifier, used in the diagnostic.
  * @param value - the tool's canonical value.
  */
-export function unwrapToolEnvelope(read: string, value: unknown): Record<string, unknown> {
+export function parseToolEnvelope(read: string, value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
     throw new DestinyPayloadError(read, `expected an object, got ${typeof value}`)
   }
@@ -55,11 +55,24 @@ export function unwrapToolEnvelope(read: string, value: unknown): Record<string,
   if (typeof parsed !== 'object' || parsed === null) {
     throw new DestinyPayloadError(read, 'envelope is not an object')
   }
-  if ((parsed as { ok?: unknown }).ok === false) {
+  return parsed as Record<string, unknown>
+}
+
+/**
+ * Unwrap a read envelope, treating `ok:false` as a failure.
+ *
+ * Writes must not use this: their `ok:false` carries the confirmation envelope,
+ * which is data to show the user, not an error.
+ * @param read - read identifier, used in the diagnostic.
+ * @param value - the tool's canonical value.
+ */
+export function unwrapToolEnvelope(read: string, value: unknown): Record<string, unknown> {
+  const parsed = parseToolEnvelope(read, value)
+  if (parsed.ok === false) {
     const message = (parsed as { error?: { message?: unknown } }).error?.message
     throw new DestinyPayloadError(read, typeof message === 'string' ? message : 'ok=false')
   }
-  return parsed as Record<string, unknown>
+  return parsed
 }
 
 /** Read one character entry without inventing defaults for missing fields. */

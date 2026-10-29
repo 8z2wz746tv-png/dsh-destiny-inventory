@@ -6,9 +6,11 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
-import { getInventory } from './mcp/inventory'
+import { runAction } from './mcp/actions'
+import { getInventory, clearInventoryCache } from './mcp/inventory'
+import { clearItemCaches, readItemDetail } from './mcp/item'
 import { runInventoryQuery } from './mcp/queries'
-import type { BridgeResponse } from './mcp/types'
+import type { ActionRequest, BridgeResponse } from './mcp/types'
 
 export const name = 'dsh-destiny-inventory'
 
@@ -29,6 +31,21 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     'cache-control': 'no-store',
   })
   res.end(payload)
+}
+
+/** Read one JSON request body, refusing to buffer an unbounded payload. */
+async function readJsonBody(req: IncomingMessage, limitBytes = 64 * 1024): Promise<unknown> {
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const chunk of req) {
+    const buffer = chunk as Buffer
+    total += buffer.length
+    if (total > limitBytes) throw new Error(`request body over ${limitBytes} bytes`)
+    chunks.push(buffer)
+  }
+  const text = Buffer.concat(chunks).toString('utf8')
+  if (text.trim() === '') return {}
+  return JSON.parse(text)
 }
 
 /** Translate a thrown bridge fault into a stable wire code. */
@@ -53,15 +70,66 @@ export function apply(ctx: Context, config: ConfigShape): void {
     kind: 'prefix',
     path: config.routePath,
     async handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+      const query = url.pathname.slice(config.routePath.length) || '/'
+
+      if (query === '/action') {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: { code: 'MethodNotAllowed', message: 'POST only' } })
+          return
+        }
+        try {
+          const body = (await readJsonBody(req)) as {
+            request?: ActionRequest
+            itemName?: string
+          }
+          if (body.request === undefined) {
+            sendJson(res, 400, {
+              ok: false,
+              error: { code: 'BadRequest', message: 'body needs { request, itemName }' },
+            })
+            return
+          }
+          const receipt = await runAction(
+            ctx,
+            config.mcpServer,
+            body.request,
+            body.itemName ?? '',
+          )
+          if (receipt.applied) {
+            // A write moves the account on; both caches now describe the past.
+            clearInventoryCache()
+            clearItemCaches()
+          }
+          sendJson(res, 200, { ok: true, data: receipt } satisfies BridgeResponse<unknown>)
+        } catch (error) {
+          sendJson(res, 502, { ok: false, error: toFailure(error) } satisfies BridgeResponse<never>)
+        }
+        return
+      }
+
       if (req.method !== 'GET') {
         sendJson(res, 405, { ok: false, error: { code: 'MethodNotAllowed', message: 'GET only' } })
         return
       }
-      const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-      const query = url.pathname.slice(config.routePath.length) || '/'
       try {
         if (query === '/characters') {
           const data = await runInventoryQuery(ctx, config.mcpServer, 'characters')
+          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
+          return
+        }
+        if (query === '/item') {
+          const id = url.searchParams.get('id') ?? ''
+          if (id === '') {
+            sendJson(res, 400, {
+              ok: false,
+              error: { code: 'BadRequest', message: 'item needs ?id=' },
+            })
+            return
+          }
+          const data = await readItemDetail(ctx, config.mcpServer, id, {
+            force: url.searchParams.get('refresh') === '1',
+          })
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }

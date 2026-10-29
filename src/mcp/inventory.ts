@@ -120,10 +120,15 @@ export function toItemRow(row: Record<string, unknown>, exotics: ExoticIndex): I
     throw new DestinyPayloadError('inventory', 'item row is missing item_instance_id/item_hash/name')
   }
   const location = typeof row.location === 'string' ? row.location : ''
+  const rawType = typeof row.item_type === 'string' ? row.item_type : ''
+  const kind: ItemRow['kind'] =
+    rawType === 'Weapon' ? 'weapon' : rawType === 'Armor' ? 'armor' : 'other'
   return {
     id: itemIdentity(location, instanceId, hash),
+    instanceId,
     hash,
     name,
+    kind,
     type: typeof row.item_type_display === 'string' ? row.item_type_display : '',
     bucket: typeof row.bucket_type === 'string' ? row.bucket_type : '',
     power: typeof row.power === 'number' ? row.power : null,
