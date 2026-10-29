@@ -11,6 +11,8 @@
  * to the artwork layer, and they are named once here so nothing else hardcodes
  * a colour.
  */
+import { INVENTORY_CSS } from './legacy/inventoryCss'
+
 const CSS = `
 .dsh-destiny-panel {
   display: flex;
@@ -257,6 +259,50 @@ const CSS = `
 }
 `
 
+/**
+ * 老页面的主题桥。
+ *
+ * `inventory.css` 是按老项目 `styles/tokens.css` 那套变量名写的（--bg / --surface-*
+ * / --accent…）。这里把这套名字接到宿主的 `--dsw-alias-*` 上，于是面板跟着 DSH
+ * 的主题走、亮暗自动，而不是把老项目那套深色皮肤整个搬进来（红线：样式只用
+ * 主题 token）。稀有度/元素/伤害类型那些本色不在此列——它们属于内容色，本来就在
+ * inventory.css 里写死。
+ */
+const LEGACY_THEME = `
+.dsh-destiny-legacy {
+  --bg: var(--dsw-alias-bg-base);
+  --bg-raised: var(--dsw-alias-bg-layer-1);
+  --surface-1: var(--dsw-alias-bg-layer-1);
+  --surface-2: var(--dsw-alias-bg-layer-2);
+  --surface-3: var(--dsw-alias-bg-layer-3);
+  --panel: var(--dsw-alias-bg-layer-2);
+  --panel-hover: var(--dsw-alias-interactive-bg-hover);
+  --panel-active: var(--dsw-alias-bg-layer-3);
+  --line: var(--dsw-alias-border-l2);
+  --line-soft: var(--dsw-alias-border-l1);
+  --line-strong: var(--dsw-alias-border-l4);
+  --text: var(--dsw-alias-label-primary);
+  --text-strong: var(--dsw-alias-label-primary);
+  --muted: var(--dsw-alias-label-secondary);
+  --muted-strong: var(--dsw-alias-label-secondary);
+  --accent: var(--dsw-alias-brand-primary);
+  --accent-hover: var(--dsw-alias-brand-primary);
+  --accent-soft: var(--dsw-alias-interactive-bg-hover);
+  --accent-border: var(--dsw-alias-border-l4);
+  --accent-ink: var(--dsw-alias-label-primary-inverted, #fff);
+  --cool: var(--dsw-alias-link);
+  --success: var(--dsw-alias-state-success-primary);
+  --warning: var(--dsw-alias-state-warn-primary);
+  --danger: var(--dsw-alias-state-error-primary);
+  --focus: var(--dsw-alias-brand-primary);
+  block-size: 100%;
+  min-block-size: 0;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+`
+
 /** Stable id so a second registration reuses the first stylesheet. */
 const STYLE_ID = 'dsh-destiny-inventory-styles'
 
@@ -266,7 +312,7 @@ export function ensureStyles(): () => void {
   if (existing !== null) return () => undefined
   const element = document.createElement('style')
   element.id = STYLE_ID
-  element.textContent = CSS
+  element.textContent = CSS + LEGACY_THEME + INVENTORY_CSS
   document.head.appendChild(element)
   return () => element.remove()
 }

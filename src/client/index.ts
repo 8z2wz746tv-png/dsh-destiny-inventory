@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { InventoryPanel } from './InventoryPanel'
 import { InventoryPanelIcon } from './InventoryPanelIcon'
+import { LegacyInventoryPanel } from './LegacyInventoryPanel'
 import type { ClientSlotSeam } from './slots'
 import { ensureStyles } from './styles'
 
@@ -59,7 +59,7 @@ export function apply(ctx: Context): void {
           key: PANEL_ID,
           inject: () => ({ routePath }),
         },
-        InventoryPanel,
+        LegacyInventoryPanel,
       ),
     ),
   )
