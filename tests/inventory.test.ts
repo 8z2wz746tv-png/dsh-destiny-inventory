@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { DestinyPayloadError } from '../src/mcp/queries'
 import {
-  buildExoticIndex,
+  buildRarityIndex,
   itemIdentity,
   parseInventoryPage,
   toItemRow,
   uniquifyKeys,
 } from '../src/mcp/inventory'
+import type { ItemRarity } from '../src/mcp/types'
 
-/** Exotic index helper: hashes plus instance ids. */
-function exotics(instances: string[] = [], hashes: number[] = []) {
-  return { instances: new Set(instances), hashes: new Set(hashes) }
+/** Rarity index helper: instance ids and hashes at one tier. */
+function rarityIndex(instances: string[] = [], hashes: number[] = [], tier: ItemRarity = 'exotic') {
+  const byInstance = new Map<string, ItemRarity>()
+  const byHash = new Map<number, ItemRarity>()
+  for (const id of instances) byInstance.set(id, tier)
+  for (const hash of hashes) byHash.set(hash, tier)
+  return { byInstance, byHash }
 }
 
 /** The exact envelope shape inventory_assistant answers with, condensed. */
@@ -81,7 +86,7 @@ describe('parseInventoryPage', () => {
 
 describe('toItemRow', () => {
   it('keeps the paint fields and drops the rest', () => {
-    const row = toItemRow(RAW_ROW, exotics())
+    const row = toItemRow(RAW_ROW, rarityIndex())
     expect(row).toEqual({
       id: 'hunter:6917530198634644757',
       instanceId: '6917530198634644757',
@@ -97,29 +102,29 @@ describe('toItemRow', () => {
       icon: 'https://www.bungie.net/i.jpg',
       location: 'hunter',
       characterId: '2305843009679355779',
-      exotic: false,
+      rarity: 'unknown',
     })
     expect(JSON.stringify(row)).not.toContain('name_en')
     expect(JSON.stringify(row)).not.toContain('armor_system')
   })
 
-  it('marks exotics by instance id', () => {
-    const row = toItemRow(RAW_ROW, exotics(['6917530198634644757']))
-    expect(row.exotic).toBe(true)
+  it('takes its rarity from the filtered reads, by instance id', () => {
+    const row = toItemRow(RAW_ROW, rarityIndex(['6917530198634644757']))
+    expect(row.rarity).toBe('exotic')
   })
 
-  it('marks exotics by hash so stackables are not all gold', () => {
+  it('falls back to the hash so stackables are not all marked one rarity', () => {
     const stackable = { ...RAW_ROW, item_instance_id: '0', item_hash: 999, location: 'profile' }
-    expect(toItemRow(stackable, exotics([], [999])).exotic).toBe(true)
-    expect(toItemRow(stackable, exotics(['123'], [])).exotic).toBe(false)
+    expect(toItemRow(stackable, rarityIndex([], [999])).rarity).toBe('exotic')
+    expect(toItemRow(stackable, rarityIndex(['123'], [])).rarity).toBe('unknown')
   })
 
   it('fails on a row missing its identity rather than painting a blank tile', () => {
-    expect(() => toItemRow({ item_hash: 1, name: 'x' }, exotics())).toThrow(DestinyPayloadError)
+    expect(() => toItemRow({ item_hash: 1, name: 'x' }, rarityIndex())).toThrow(DestinyPayloadError)
   })
 
   it('keeps a null power instead of inventing zero', () => {
-    const row = toItemRow({ ...RAW_ROW, power: null }, exotics())
+    const row = toItemRow({ ...RAW_ROW, power: null }, rarityIndex())
     expect(row.power).toBeNull()
   })
 })
@@ -140,7 +145,7 @@ describe('itemIdentity', () => {
 })
 
 describe('uniquifyKeys', () => {
-  const base = toItemRow(RAW_ROW, exotics())
+  const base = toItemRow(RAW_ROW, rarityIndex())
 
   it('leaves a unique key alone', () => {
     expect(uniquifyKeys([base])[0].id).toBe(base.id)
@@ -156,10 +161,20 @@ describe('uniquifyKeys', () => {
   })
 })
 
-describe('buildExoticIndex', () => {
-  it('skips the placeholder instance id but keeps the hash', () => {
-    const index = buildExoticIndex([{ item_instance_id: '0', item_hash: 5 }, { item_instance_id: '9', item_hash: 6 }])
-    expect([...index.instances]).toEqual(['9'])
-    expect([...index.hashes].sort()).toEqual([5, 6])
+describe('buildRarityIndex', () => {
+  it('indexes each tier by instance id and by hash', () => {
+    const index = buildRarityIndex([
+      { rarity: 'exotic', rows: [{ item_instance_id: '9', item_hash: 6 }] },
+      { rarity: 'legendary', rows: [{ item_instance_id: '10', item_hash: 7 }] },
+    ])
+    expect(index.byInstance.get('9')).toBe('exotic')
+    expect(index.byInstance.get('10')).toBe('legendary')
+    expect(index.byHash.get(7)).toBe('legendary')
+  })
+
+  it('keeps the hash but not the placeholder id for stackables', () => {
+    const index = buildRarityIndex([{ rarity: 'rare', rows: [{ item_instance_id: '0', item_hash: 5 }] }])
+    expect(index.byInstance.has('0')).toBe(false)
+    expect(index.byHash.get(5)).toBe('rare')
   })
 })

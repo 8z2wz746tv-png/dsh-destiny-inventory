@@ -44,18 +44,47 @@ export const DEFAULT_FILTERS: InventoryFilters = {
   sort: 'power-desc',
 }
 
-/** One bucket section inside a location. */
-export interface BucketSection {
-  bucket: string
+/** One item-type group, e.g. 手炮 or 腿部护甲. */
+export interface TypeGroup {
+  label: string
   items: ItemRow[]
 }
 
-/** One location section, with its buckets ordered the way the game lists them. */
-export interface LocationSection {
-  location: string
+/**
+ * One kind section: 武器 / 防具 / 杂项.
+ *
+ * Grouping by the tool's `bucket_type` is useless inside the vault — all 1295
+ * vault items report `Vault (General)` — so the split is by item type, which is
+ * also how DIM lays a vault out.
+ */
+export interface KindSection {
+  kind: 'weapon' | 'armor' | 'other'
   label: string
   itemCount: number
-  buckets: BucketSection[]
+  groups: TypeGroup[]
+}
+
+/** Section order and labels, matching the game's own tabs. */
+const KIND_ORDER: { kind: KindSection['kind']; label: string; rank: number }[] = [
+  { kind: 'weapon', label: '武器', rank: 1 },
+  { kind: 'armor', label: '防具', rank: 2 },
+  { kind: 'other', label: '杂项', rank: 3 },
+]
+
+/** Type order inside a section, mirroring how the game lists a vault. */
+const TYPE_ORDER = [
+  '手炮', '自动步枪', '脉冲步枪', '斥候步枪', '手枪', '微型冲锋枪',
+  '霰弹枪', '融合步枪', '线性融合步枪', '狙击步枪', '榴弹发射器',
+  '火箭发射器', '机枪', '刀剑', '偃月', '战斗弓箭', '追踪步枪',
+  '头盔', '臂铠', '胸部护甲', '腿部护甲', '猎人披风', '泰坦印记', '术士臂环',
+  '机灵外壳', '载具', '飞船', '徽标', '终结技', '动作收藏', '表情',
+  '神器', '消耗品', '材料', '货币', '模组', '任务步骤', '可兑换', '记忆水晶',
+]
+
+/** Rank of one item type, unknown types last. */
+function typeRank(label: string): number {
+  const index = TYPE_ORDER.indexOf(label)
+  return index === -1 ? TYPE_ORDER.length : index
 }
 
 /** Display order and labels for locations; unknown locations sort last. */
@@ -66,35 +95,6 @@ const LOCATION_ORDER: Record<string, { label: string; rank: number }> = {
   vault: { label: '仓库', rank: 4 },
   profile: { label: '账号', rank: 5 },
   postmaster: { label: '邮政官', rank: 6 },
-}
-
-/** Bucket order inside a location, mirroring the in-game character screen. */
-const BUCKET_ORDER = [
-  'Kinetic Weapons',
-  'Energy Weapons',
-  'Power Weapons',
-  'Helmet',
-  'Gauntlets',
-  'Chest Armor',
-  'Leg Armor',
-  'Class Armor',
-  'Ghost',
-  'Vehicle',
-  'Ships',
-  'Subclass',
-  'Clan Banners',
-  'Emblems',
-  'Emotes',
-  'Finishers',
-  'Modifications',
-  'Consumables',
-  'Quests',
-]
-
-/** Rank of one bucket, unknown buckets last. */
-function bucketRank(bucket: string): number {
-  const index = BUCKET_ORDER.indexOf(bucket)
-  return index === -1 ? BUCKET_ORDER.length : index
 }
 
 /**
@@ -130,41 +130,37 @@ export function compareItems(a: ItemRow, b: ItemRow, sort: SortKey): number {
  * @param items - the full snapshot rows.
  * @param filters - current toolbar state.
  */
-export function buildSections(items: ItemRow[], filters: InventoryFilters): LocationSection[] {
+export function buildSections(items: ItemRow[], filters: InventoryFilters): KindSection[] {
   const visible = items.filter((item) => matchesFilters(item, filters))
-  const byLocation = new Map<string, ItemRow[]>()
+  const byKind = new Map<KindSection['kind'], ItemRow[]>()
   for (const item of visible) {
-    const bucket = byLocation.get(item.location)
-    if (bucket === undefined) byLocation.set(item.location, [item])
+    const bucket = byKind.get(item.kind)
+    if (bucket === undefined) byKind.set(item.kind, [item])
     else bucket.push(item)
   }
-  const sections: LocationSection[] = []
-  for (const [location, rows] of byLocation) {
-    const byBucket = new Map<string, ItemRow[]>()
+  const sections: KindSection[] = []
+  for (const entry of KIND_ORDER) {
+    const rows = byKind.get(entry.kind)
+    if (rows === undefined || rows.length === 0) continue
+    const byType = new Map<string, ItemRow[]>()
     for (const row of rows) {
-      const bucket = byBucket.get(row.bucket)
-      if (bucket === undefined) byBucket.set(row.bucket, [row])
-      else bucket.push(row)
+      const label = row.type === '' ? '未分类' : row.type
+      const group = byType.get(label)
+      if (group === undefined) byType.set(label, [row])
+      else group.push(row)
     }
-    const buckets = [...byBucket.entries()]
-      .sort(([left], [right]) => bucketRank(left) - bucketRank(right) || left.localeCompare(right))
-      .map(([bucket, bucketRows]) => ({
-        bucket,
-        items: [...bucketRows].sort((a, b) => compareItems(a, b, filters.sort)),
+    const groups = [...byType.entries()]
+      .sort(
+        ([left], [right]) =>
+          typeRank(left) - typeRank(right) || left.localeCompare(right, 'zh-Hans-CN'),
+      )
+      .map(([label, groupRows]) => ({
+        label,
+        items: [...groupRows].sort((a, b) => compareItems(a, b, filters.sort)),
       }))
-    const meta = LOCATION_ORDER[location]
-    sections.push({
-      location,
-      label: meta?.label ?? location,
-      itemCount: rows.length,
-      buckets,
-    })
+    sections.push({ kind: entry.kind, label: entry.label, itemCount: rows.length, groups })
   }
-  return sections.sort((left, right) => {
-    const leftRank = LOCATION_ORDER[left.location]?.rank ?? 99
-    const rightRank = LOCATION_ORDER[right.location]?.rank ?? 99
-    return leftRank - rightRank || left.location.localeCompare(right.location)
-  })
+  return sections
 }
 
 /**

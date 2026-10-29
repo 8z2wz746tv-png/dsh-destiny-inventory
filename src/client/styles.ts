@@ -1,14 +1,15 @@
 /**
  * Panel stylesheet, injected once per client entry.
  *
- * Scoped by the `dsh-destiny-` prefix and coloured exclusively with
- * `--dsw-alias-*` theme tokens, so the panel follows the host theme instead of
- * looking like a foreign surface (guide red line 1).
+ * All chrome is coloured with `--dsw-alias-*` theme tokens, so the panel follows
+ * the host theme instead of looking like a foreign surface (guide red line 1).
+ * The one exception is item rarity: gold, purple and blue are what make a wall
+ * of 1295 icons readable at a glance, they belong to the artwork layer rather
+ * than to the surrounding chrome, and they are named once in `--dsh-rarity-*`
+ * below so nothing else in this file hardcodes a colour.
  *
- * Layout rule: the panel itself never scrolls — the body does. Header, location
- * tabs and toolbar stay put, which is what stops a 1922-item account from
- * turning into one endless page. Bucket titles are sticky inside the body so the
- * bucket you are looking at is always named.
+ * Layout rule: the panel never scrolls, the body does. Header strip, toolbar and
+ * section titles stay put.
  */
 const CSS = `
 .dsh-destiny-panel {
@@ -16,29 +17,19 @@ const CSS = `
   flex-direction: column;
   block-size: 100%;
   min-block-size: 0;
-  padding: 16px 20px 0;
+  padding: 14px 18px 0;
   gap: 10px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-base);
   font-size: 13px;
   overflow: hidden;
-}
-.dsh-destiny-panel__header {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-.dsh-destiny-panel__name {
-  font-size: 16px;
-  font-weight: 600;
-}
-.dsh-destiny-panel__meta,
-.dsh-destiny-panel__total {
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh-destiny-panel__total {
-  margin-inline-start: auto;
-  font-variant-numeric: tabular-nums;
+
+  --dsh-rarity-exotic-border: #ceb03d;
+  --dsh-rarity-exotic-wash: rgba(206, 176, 61, 0.16);
+  --dsh-rarity-legendary-border: #7d5aa6;
+  --dsh-rarity-legendary-wash: rgba(93, 60, 122, 0.34);
+  --dsh-rarity-rare-border: #3f7ea8;
+  --dsh-rarity-rare-wash: rgba(56, 106, 143, 0.3);
 }
 .dsh-destiny-panel__state {
   color: var(--dsw-alias-label-secondary);
@@ -48,34 +39,64 @@ const CSS = `
   white-space: pre-wrap;
 }
 
-.dsh-destiny-tabs {
+.dsh-destiny-stores {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding-block-end: 2px;
-  border-block-end: 1px solid var(--dsw-alias-border-l2);
 }
-.dsh-destiny-tab {
+.dsh-destiny-store {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 156px;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: inherit;
   font: inherit;
-  color: var(--dsw-alias-label-secondary);
-  background: none;
-  border: 0;
-  border-block-end: 2px solid transparent;
-  padding: 6px 12px;
   cursor: pointer;
+  overflow: hidden;
+  text-align: start;
 }
-.dsh-destiny-tab:hover {
-  color: var(--dsw-alias-label-primary);
+.dsh-destiny-store:hover {
+  border-color: var(--dsw-alias-border-l4);
 }
-.dsh-destiny-tab.is-active {
-  color: var(--dsw-alias-label-primary);
-  border-block-end-color: var(--dsw-alias-brand-primary);
+.dsh-destiny-store.is-active {
+  border-color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-bg-layer-3);
+}
+.dsh-destiny-store__emblem {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  opacity: 0.45;
+}
+.dsh-destiny-store__wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--dsw-alias-bg-base) 12%, transparent 70%);
+}
+.dsh-destiny-store__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dsh-destiny-store__label {
   font-weight: 600;
 }
-.dsh-destiny-tab__count {
+.dsh-destiny-store__stats {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.dsh-destiny-store__count {
+  position: relative;
+  margin-inline-start: auto;
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
@@ -97,7 +118,7 @@ const CSS = `
   padding: 5px 8px;
 }
 .dsh-destiny-toolbar__search {
-  inline-size: 170px;
+  inline-size: 168px;
 }
 .dsh-destiny-toolbar__search:focus-visible,
 .dsh-destiny-toolbar__select:focus-visible {
@@ -185,64 +206,76 @@ const CSS = `
   overflow: auto;
   padding-block-end: 16px;
 }
-.dsh-destiny-bucket {
-  margin-block-end: 16px;
+.dsh-destiny-section + .dsh-destiny-section {
+  margin-block-start: 18px;
 }
-.dsh-destiny-bucket__title {
+.dsh-destiny-section__title {
   position: sticky;
   inset-block-start: 0;
-  z-index: 1;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 0 5px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--dsw-alias-bg-base);
+  border-block-end: 1px solid var(--dsw-alias-border-l3);
+}
+.dsh-destiny-section__count,
+.dsh-destiny-group__count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.dsh-destiny-group {
+  margin-block-end: 12px;
+}
+.dsh-destiny-group__title {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin: 0 0 8px;
-  padding: 6px 0 4px;
+  margin: 0 0 6px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-base);
-}
-.dsh-destiny-bucket__count {
-  font-size: 11px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
 }
 .dsh-destiny-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(52px, 52px));
+  grid-template-columns: repeat(auto-fill, minmax(72px, 72px));
   gap: 6px;
 }
 .dsh-destiny-tile {
   position: relative;
-  inline-size: 52px;
-  block-size: 52px;
+  inline-size: 72px;
+  block-size: 72px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--dsw-alias-bg-layer-2);
   overflow: hidden;
   cursor: grab;
 }
 .dsh-destiny-tile:hover {
-  border-color: var(--dsw-alias-border-l4);
-  background: var(--dsw-alias-interactive-bg-hover);
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: -2px;
 }
 .dsh-destiny-tile:active {
   cursor: grabbing;
 }
-.dsh-destiny-tile.is-exotic {
-  border-color: var(--dsw-alias-state-warn-primary);
-  background: var(--dsw-alias-bg-layer-3);
+.dsh-destiny-tile.r-exotic {
+  border-color: var(--dsh-rarity-exotic-border);
+  background: var(--dsh-rarity-exotic-wash);
 }
-.dsh-destiny-tile[data-equipped="1"]::after {
-  content: "";
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inline-size: 100%;
-  block-size: 2px;
-  background: var(--dsw-alias-brand-primary);
+.dsh-destiny-tile.r-legendary {
+  border-color: var(--dsh-rarity-legendary-border);
+  background: var(--dsh-rarity-legendary-wash);
+}
+.dsh-destiny-tile.r-rare {
+  border-color: var(--dsh-rarity-rare-border);
+  background: var(--dsh-rarity-rare-wash);
 }
 .dsh-destiny-tile__icon {
   inline-size: 100%;
@@ -253,21 +286,30 @@ const CSS = `
 .dsh-destiny-tile__power {
   position: absolute;
   inset-block-end: 0;
-  inset-inline-end: 0;
-  padding: 0 3px;
-  font-size: 10px;
-  line-height: 14px;
+  inset-inline-start: 0;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.55));
-  border-start-start-radius: 4px;
+  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.6));
+  border-start-end-radius: 5px;
   font-variant-numeric: tabular-nums;
 }
 .dsh-destiny-tile__lock {
   position: absolute;
   inset-block-start: 1px;
-  inset-inline-start: 2px;
-  font-size: 9px;
+  inset-inline-start: 3px;
+  font-size: 10px;
   line-height: 1;
+}
+.dsh-destiny-tile__worn {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
 }
 
 .dsh-destiny-receipts {

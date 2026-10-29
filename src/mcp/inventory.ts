@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { callDestinyTool } from './client'
 import { DestinyPayloadError, unwrapToolEnvelope } from './queries'
-import type { InventorySnapshot, ItemRow } from './types'
+import type { InventorySnapshot, ItemRarity, ItemRow } from './types'
 
 /**
  * The account inventory read.
@@ -14,11 +14,41 @@ import type { InventorySnapshot, ItemRow } from './types'
 /** Page size requested from the tool. */
 const PAGE_SIZE = 1000
 
-/** The exotic membership index, by instance id and by definition hash. */
-export interface ExoticIndex {
-  instances: ReadonlySet<string>
-  /** Needed for stackables, whose instance id is always `"0"`. */
-  hashes: ReadonlySet<number>
+/**
+ * The rarity lookup, by instance id and by definition hash.
+ *
+ * Both keys are needed: stackables report instance id `"0"` for every one of
+ * them, so their definition hash is the only thing that can place them.
+ */
+export interface RarityIndex {
+  byInstance: ReadonlyMap<string, ItemRarity>
+  byHash: ReadonlyMap<number, ItemRarity>
+}
+
+/** The rarities the tool can filter on, in the order they are fetched. */
+const RARITY_FILTERS: { filter: string; rarity: ItemRarity }[] = [
+  { filter: '异域', rarity: 'exotic' },
+  { filter: '传说', rarity: 'legendary' },
+  { filter: '稀有', rarity: 'rare' },
+]
+
+/** Build the rarity index from the three rarity-filtered reads. */
+export function buildRarityIndex(
+  tiers: { rarity: ItemRarity; rows: Record<string, unknown>[] }[],
+): RarityIndex {
+  const byInstance = new Map<string, ItemRarity>()
+  const byHash = new Map<number, ItemRarity>()
+  for (const tier of tiers) {
+    for (const row of tier.rows) {
+      const instanceId = row.item_instance_id
+      const hash = row.item_hash
+      if (typeof instanceId === 'string' && instanceId !== '' && instanceId !== '0') {
+        byInstance.set(instanceId, tier.rarity)
+      }
+      if (typeof hash === 'number') byHash.set(hash, tier.rarity)
+    }
+  }
+  return { byInstance, byHash }
 }
 
 /**
@@ -40,18 +70,6 @@ export function uniquifyKeys(items: ItemRow[]): ItemRow[] {
 }
 
 /** Build the exotic index from the rarity-filtered read. */
-export function buildExoticIndex(rows: Record<string, unknown>[]): ExoticIndex {
-  const instances = new Set<string>()
-  const hashes = new Set<number>()
-  for (const row of rows) {
-    const instanceId = row.item_instance_id
-    const hash = row.item_hash
-    if (typeof instanceId === 'string' && instanceId !== '' && instanceId !== '0') instances.add(instanceId)
-    if (typeof hash === 'number') hashes.add(hash)
-  }
-  return { instances, hashes }
-}
-
 /** A snapshot older than this is refetched on the next request. */
 export const SNAPSHOT_TTL_MS = 60_000
 
@@ -110,9 +128,9 @@ export function itemIdentity(location: string, instanceId: string, hash: number)
  * Project one tool row onto the wire row, dropping the fields the grid never
  * paints. Missing identity fields are a hard error, not a blank card.
  * @param row - one item from `inventory_assistant(get)`.
- * @param exotics - instance ids and definition hashes known to be exotic.
+ * @param rarity - the rarity lookup built from the filtered reads.
  */
-export function toItemRow(row: Record<string, unknown>, exotics: ExoticIndex): ItemRow {
+export function toItemRow(row: Record<string, unknown>, rarity: RarityIndex): ItemRow {
   const instanceId = row.item_instance_id
   const hash = row.item_hash
   const name = row.name
@@ -138,7 +156,8 @@ export function toItemRow(row: Record<string, unknown>, exotics: ExoticIndex): I
     icon: typeof row.icon_url === 'string' ? row.icon_url : '',
     location,
     characterId: typeof row.character_id === 'string' ? row.character_id : '',
-    exotic: exotics.instances.has(instanceId) || exotics.hashes.has(hash),
+    rarity:
+      rarity.byInstance.get(instanceId) ?? rarity.byHash.get(hash) ?? ('unknown' as ItemRarity),
   }
 }
 
@@ -177,23 +196,28 @@ async function readAllPages(
 /**
  * Read the whole account inventory and mark exotics.
  *
- * Rarity is a filter, not a field: the only way to learn which items are
- * exotic is to ask for them explicitly, so this pays one extra read and
- * reports everything else as unknown.
+ * Rarity is a filter, not a field: the only way to learn an item's rarity is to
+ * ask for each tier explicitly, so this pays one extra read per tier and reports
+ * anything outside those three tiers as unknown.
  * @param ctx - plugin context carrying the tool registry.
  * @param server - configured MCP server name.
  */
 export async function readInventory(ctx: Context, server: string): Promise<InventorySnapshot> {
-  const [all, exotic] = await Promise.all([
+  const [all, ...tiers] = await Promise.all([
     readAllPages(ctx, server),
-    readAllPages(ctx, server, { rarity: '异域' }),
+    ...RARITY_FILTERS.map(async (tier) => ({
+      rarity: tier.rarity,
+      page: await readAllPages(ctx, server, { rarity: tier.filter }),
+    })),
   ])
-  const exotics = buildExoticIndex(exotic.rows)
+  const rarity = buildRarityIndex(
+    tiers.map((tier) => ({ rarity: tier.rarity, rows: tier.page.rows })),
+  )
   return {
     fetchedAt: Date.now(),
     total: all.total,
     truncated: all.truncated,
-    items: uniquifyKeys(all.rows.map((row) => toItemRow(row, exotics))),
+    items: uniquifyKeys(all.rows.map((row) => toItemRow(row, rarity))),
   }
 }
 

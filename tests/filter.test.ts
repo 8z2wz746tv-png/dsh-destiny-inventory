@@ -27,7 +27,7 @@ function row(overrides: Partial<ItemRow>): ItemRow {
     icon: '',
     location: 'vault',
     characterId: '',
-    exotic: false,
+    rarity: 'legendary',
     ...overrides,
   }
 }
@@ -90,30 +90,35 @@ describe('compareItems', () => {
 })
 
 describe('buildSections', () => {
-  it('orders locations the way the game lists them', () => {
-    const sections = buildSections(
-      [row({ id: 'v', location: 'vault' }), row({ id: 'h', location: 'hunter' })],
-      { ...DEFAULT_FILTERS, location: '' },
-    )
-    expect(sections.map((section) => section.location)).toEqual(['hunter', 'vault'])
-    expect(sections.map((section) => section.label)).toEqual(['猎人', '仓库'])
-  })
-
-  it('orders buckets weapons-first and keeps counts', () => {
+  it('splits weapons from armor before splitting by type', () => {
     const sections = buildSections(
       [
-        row({ id: 'a', bucket: 'Consumables' }),
-        row({ id: 'b', bucket: 'Kinetic Weapons' }),
-        row({ id: 'c', bucket: 'Kinetic Weapons' }),
+        row({ id: 'a', kind: 'other', type: '消耗品' }),
+        row({ id: 'b', kind: 'weapon', type: '手炮' }),
+        row({ id: 'c', kind: 'armor', type: '腿部护甲' }),
       ],
       DEFAULT_FILTERS,
     )
-    expect(sections[0].buckets.map((bucket) => bucket.bucket)).toEqual([
-      'Kinetic Weapons',
-      'Consumables',
+    expect(sections.map((section) => section.label)).toEqual(['武器', '防具', '杂项'])
+    expect(sections[0].groups.map((group) => group.label)).toEqual(['手炮'])
+  })
+
+  it('groups the vault by item type, because the vault bucket is one bucket', () => {
+    // All vault items report bucket "Vault (General)", which is why bucket
+    // grouping cannot work there and type grouping is used instead.
+    const sections = buildSections(
+      [
+        row({ id: 'a', type: '手炮' }),
+        row({ id: 'b', type: '自动步枪' }),
+        row({ id: 'c', type: '手炮' }),
+      ],
+      DEFAULT_FILTERS,
+    )
+    expect(sections[0].groups.map((group) => [group.label, group.items.length])).toEqual([
+      ['手炮', 2],
+      ['自动步枪', 1],
     ])
     expect(sections[0].itemCount).toBe(3)
-    expect(sections[0].buckets[0].items).toHaveLength(2)
   })
 
   it('drops filtered-out items from the counts, not just the render', () => {
@@ -122,6 +127,7 @@ describe('buildSections', () => {
       { ...DEFAULT_FILTERS, type: '手炮' },
     )
     expect(sections[0].itemCount).toBe(1)
+    expect(sections[0].groups).toHaveLength(1)
   })
 
   it('returns nothing when every item is filtered out', () => {

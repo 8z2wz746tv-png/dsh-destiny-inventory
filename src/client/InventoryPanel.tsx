@@ -3,6 +3,7 @@ import type { DragEvent, ReactElement } from 'react'
 import type {
   ActionReceipt,
   ActionRequest,
+  CharacterRow,
   InventorySnapshot,
   ItemDetailView,
   ItemRow,
@@ -10,12 +11,7 @@ import type {
 } from '../mcp/types'
 import { fetchCharacters, fetchInventory, postAction } from './api'
 import { ItemDetailCard } from './ItemDetail'
-import {
-  DEFAULT_FILTERS,
-  availableTypes,
-  buildSections,
-  locationCounts,
-} from './filter'
+import { DEFAULT_FILTERS, availableTypes, buildSections, locationCounts } from './filter'
 import type { CategoryFilter, InventoryFilters, SortKey } from './filter'
 
 type LoadState =
@@ -23,7 +19,7 @@ type LoadState =
   | { kind: 'ready'; snapshot: InventorySnapshot; profile: PlayerProfileView }
   | { kind: 'error'; message: string }
 
-/** One finished (or failed) write, shown in the corner receipt list. */
+/** One finished (or failed) write, shown under the grid. */
 interface ReceiptLine {
   id: number
   ok: boolean
@@ -54,14 +50,22 @@ const DROP_TARGETS: { value: string; label: string }[] = [
   { value: 'vault', label: '仓库' },
 ]
 
+/** Bungie classType → the location key the inventory uses. */
+const CLASS_LOCATION: Record<number, string> = { 0: 'titan', 1: 'hunter', 2: 'warlock' }
+
+/** Bungie serves every emblem path off its own host. */
+const BUNGIE_ORIGIN = 'https://www.bungie.net'
+
 /** True when a location is a character the account can equip on. */
 function isCharacter(location: string): boolean {
   return location === 'hunter' || location === 'warlock' || location === 'titan'
 }
 
 /**
- * One inventory tile: icon, power, state marks. Draggable onto the drop bar.
- * @param props - the row, the click handler and the drag callbacks.
+ * One inventory tile. Rarity drives the border and wash, the way DIM reads at a
+ * glance; literal colours are used only here, on the artwork layer, while every
+ * piece of chrome stays on theme tokens.
+ * @param props - the row and the handlers.
  */
 function ItemTile({
   item,
@@ -81,7 +85,7 @@ function ItemTile({
   }
   return (
     <div
-      className={`dsh-destiny-tile${item.exotic ? ' is-exotic' : ''}`}
+      className={`dsh-destiny-tile r-${item.rarity}`}
       title={`${item.name}${item.type === '' ? '' : ' · ' + item.type}`}
       data-locked={item.locked ? '1' : '0'}
       data-equipped={item.equipped ? '1' : '0'}
@@ -101,15 +105,57 @@ function ItemTile({
           🔒
         </span>
       )}
+      {item.equipped && <span className="dsh-destiny-tile__worn" aria-hidden="true" />}
     </div>
   )
 }
 
 /**
+ * One store card in the top strip: emblem for a character, plain for a bucket.
+ * @param props - the store row and whether it is the open one.
+ */
+function StoreCard({
+  label,
+  count,
+  character,
+  active,
+  onSelect,
+}: {
+  label: string
+  count: number
+  character?: CharacterRow
+  active: boolean
+  onSelect: () => void
+}): ReactElement {
+  const emblem =
+    character?.emblemPath != null && character.emblemPath !== ''
+      ? `${BUNGIE_ORIGIN}${character.emblemPath}`
+      : undefined
+  return (
+    <button
+      type="button"
+      className={`dsh-destiny-store${active ? ' is-active' : ''}`}
+      onClick={onSelect}
+    >
+      {emblem !== undefined && (
+        <>
+          <img className="dsh-destiny-store__emblem" src={emblem} alt="" />
+          <span className="dsh-destiny-store__wash" aria-hidden="true" />
+        </>
+      )}
+      <span className="dsh-destiny-store__body">
+        <span className="dsh-destiny-store__label">{label}</span>
+        <span className="dsh-destiny-store__stats">
+          {character !== undefined ? `光等 ${character.light}` : `${count} 件`}
+        </span>
+      </span>
+      {character !== undefined && <span className="dsh-destiny-store__count">{count}</span>}
+    </button>
+  )
+}
+
+/**
  * The inventory page mounted in the layout's keyed `main` slot.
- *
- * One location at a time: the vault alone is 1295 items, so stacking every
- * location into one scroll buried the thing people open this page for.
  * @param props - the framework main-slot share plus this entry's injected face.
  */
 export function InventoryPanel({ routePath }: { routePath: string }): ReactElement {
@@ -141,7 +187,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   }, [load])
 
   const pushReceipt = useCallback((ok: boolean, text: string, detail: string): void => {
-    setReceipts((current) => [{ id: Date.now() + Math.random(), ok, text, detail }, ...current].slice(0, 4))
+    setReceipts((current) => [{ id: Date.now() + Math.random(), ok, text, detail }, ...current].slice(0, 3))
   }, [])
 
   const runAction = useCallback(
@@ -167,12 +213,21 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   )
 
   const items = state.kind === 'ready' ? state.snapshot.items : []
+  const profile = state.kind === 'ready' ? state.profile : undefined
   const sections = useMemo(() => buildSections(items, filters), [items, filters])
   const types = useMemo(() => availableTypes(items), [items])
   const tabs = useMemo(() => locationCounts(items), [items])
-  const currentSection = sections[0]
-  const visibleCount = currentSection?.itemCount ?? 0
+  const visibleCount = sections.reduce((sum, section) => sum + section.itemCount, 0)
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
+
+  const characterByLocation = useMemo(() => {
+    const map = new Map<string, CharacterRow>()
+    for (const character of profile?.characters ?? []) {
+      const location = CLASS_LOCATION[character.classType]
+      if (location !== undefined) map.set(location, character)
+    }
+    return map
+  }, [profile])
 
   const patch = (next: Partial<InventoryFilters>): void => setFilters((current) => ({ ...current, ...next }))
 
@@ -239,31 +294,18 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   return (
     <div className="dsh-destiny-panel" data-dsh-destiny-view="">
-      <header className="dsh-destiny-panel__header">
-        {state.kind === 'ready' && (
-          <>
-            <span className="dsh-destiny-panel__name">{state.profile.displayName}</span>
-            {state.profile.triumphScore !== null && (
-              <span className="dsh-destiny-panel__meta">凯旋分 {state.profile.triumphScore}</span>
-            )}
-            <span className="dsh-destiny-panel__total">{state.snapshot.total} 件</span>
-          </>
-        )}
-      </header>
-
-      <nav className="dsh-destiny-tabs" aria-label="位置">
+      <div className="dsh-destiny-stores">
         {tabs.map((tab) => (
-          <button
+          <StoreCard
             key={tab.value}
-            type="button"
-            className={`dsh-destiny-tab${filters.location === tab.value ? ' is-active' : ''}`}
-            onClick={() => patch({ location: tab.value })}
-          >
-            {tab.label}
-            <span className="dsh-destiny-tab__count">{tab.count}</span>
-          </button>
+            label={tab.label}
+            count={tab.count}
+            character={characterByLocation.get(tab.value)}
+            active={filters.location === tab.value}
+            onSelect={() => patch({ location: tab.value })}
+          />
         ))}
-      </nav>
+      </div>
 
       <div className="dsh-destiny-toolbar">
         <input
@@ -366,38 +408,42 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       )}
 
       <div className="dsh-destiny-body">
-        {currentSection?.buckets.map((bucket) => (
-          <div key={bucket.bucket} className="dsh-destiny-bucket">
-            <p className="dsh-destiny-bucket__title">
-              {bucket.bucket}
-              <span className="dsh-destiny-bucket__count">{bucket.items.length}</span>
-            </p>
-            <div className="dsh-destiny-grid">
-              {bucket.items.map((item) => (
-                <ItemTile
-                  key={item.id}
-                  item={item}
-                  onOpen={(row) => setDetailId(row.id)}
-                  onDragStart={setDragging}
-                  onDragEnd={() => {
-                    setDragging(null)
-                    setDropTarget(null)
-                  }}
-                />
-              ))}
-            </div>
-          </div>
+        {sections.map((section) => (
+          <section key={section.kind} className="dsh-destiny-section">
+            <h3 className="dsh-destiny-section__title">
+              {section.label}
+              <span className="dsh-destiny-section__count">{section.itemCount}</span>
+            </h3>
+            {section.groups.map((group) => (
+              <div key={group.label} className="dsh-destiny-group">
+                <p className="dsh-destiny-group__title">
+                  {group.label}
+                  <span className="dsh-destiny-group__count">{group.items.length}</span>
+                </p>
+                <div className="dsh-destiny-grid">
+                  {group.items.map((item) => (
+                    <ItemTile
+                      key={item.id}
+                      item={item}
+                      onOpen={(row) => setDetailId(row.id)}
+                      onDragStart={setDragging}
+                      onDragEnd={() => {
+                        setDragging(null)
+                        setDropTarget(null)
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </section>
         ))}
       </div>
 
       {receipts.length > 0 && (
         <div className="dsh-destiny-receipts">
           {receipts.map((line) => (
-            <div
-              key={line.id}
-              className={`dsh-destiny-receipt${line.ok ? '' : ' is-error'}`}
-              title={line.detail}
-            >
+            <div key={line.id} className={`dsh-destiny-receipt${line.ok ? '' : ' is-error'}`} title={line.detail}>
               <span className="dsh-destiny-receipt__text">{line.text}</span>
               <span className="dsh-destiny-receipt__detail">{line.detail}</span>
             </div>

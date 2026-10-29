@@ -7,6 +7,9 @@
  * the bridge.
  */
 
+/** The rarities the tool can filter on, plus the honest remainder. */
+export type ItemRarity = 'exotic' | 'legendary' | 'rare' | 'unknown'
+
 /** One character as the inventory view needs it. */
 export interface CharacterRow {
   characterId: string
@@ -60,11 +63,13 @@ export interface ItemRow {
   location: ItemLocation
   characterId: string
   /**
-   * True when the item came back from the `rarity=异域` read. The snapshot has
-   * no rarity field of its own — the MCP exposes rarity as a filter only — so
-   * every other item is reported as unknown rather than assumed legendary.
+   * Rarity, recovered from the three rarity-filtered reads.
+   *
+   * The tool exposes rarity as a filter, never as a field, and it only knows
+   * exotic/legendary/rare — so 81 of 1922 items (commons, consumables) come back
+   * `unknown` and are drawn neutral rather than guessed.
    */
-  exotic: boolean
+  rarity: ItemRarity
 }
 
 /** One cached read of the whole account inventory. */
