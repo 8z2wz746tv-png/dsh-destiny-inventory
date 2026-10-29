@@ -17,11 +17,24 @@ export class BridgeError extends Error {
   }
 }
 
+/**
+ * The host half loaded in the running app has no such route.
+ *
+ * That is not a network fault: the browser half and the host half come from one
+ * package, so a missing route means the app is still running an older build of
+ * the plugin — installing a new one does not rebind a module the host already
+ * loaded at startup.
+ */
+export const STALE_HOST_MESSAGE =
+  '宿主里的插件还是旧版本（这条接口对新版本才有）。请完全退出 DSH 再打开——' +
+  '只关窗口不够，插件的宿主半侧只在启动时加载一次。'
+
 /** One bridge read: fetch, unwrap the envelope, fail with a typed error. */
 async function readBridge<T>(url: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal, headers: { accept: 'application/json' } })
   const body = (await response.json()) as BridgeResponse<T>
   if (body.ok !== true) {
+    if (body.error.code === 'NotFound') throw new BridgeError(body.error.code, STALE_HOST_MESSAGE)
     throw new BridgeError(body.error.code, body.error.message)
   }
   if (!response.ok) throw new BridgeError('http', `bridge answered ${response.status}`)
