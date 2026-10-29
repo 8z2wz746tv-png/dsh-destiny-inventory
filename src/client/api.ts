@@ -1,4 +1,4 @@
-import type { BridgeResponse, PlayerProfileView } from '../mcp/types'
+import type { BridgeResponse, InventorySnapshot, PlayerProfileView } from '../mcp/types'
 
 /**
  * Browser-half client for the plugin's own bridge route.
@@ -17,20 +17,37 @@ export class BridgeError extends Error {
   }
 }
 
-/**
- * Read the account header and characters.
- * @param routePath - bridge base pathname, as configured on the host half.
- * @param signal - caller-owned cancellation.
- */
-export async function fetchCharacters(
-  routePath: string,
-  signal: AbortSignal,
-): Promise<PlayerProfileView> {
-  const response = await fetch(`${routePath}/characters`, { signal, headers: { accept: 'application/json' } })
-  const body = (await response.json()) as BridgeResponse<PlayerProfileView>
+/** One bridge read: fetch, unwrap the envelope, fail with a typed error. */
+async function readBridge<T>(url: string, signal: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal, headers: { accept: 'application/json' } })
+  const body = (await response.json()) as BridgeResponse<T>
   if (body.ok !== true) {
     throw new BridgeError(body.error.code, body.error.message)
   }
   if (!response.ok) throw new BridgeError('http', `bridge answered ${response.status}`)
   return body.data
+}
+
+/**
+ * Read the account header and characters.
+ * @param routePath - bridge base pathname, as configured on the host half.
+ * @param signal - caller-owned cancellation.
+ */
+export function fetchCharacters(routePath: string, signal: AbortSignal): Promise<PlayerProfileView> {
+  return readBridge<PlayerProfileView>(`${routePath}/characters`, signal)
+}
+
+/**
+ * Read the whole account inventory snapshot.
+ * @param routePath - bridge base pathname, as configured on the host half.
+ * @param signal - caller-owned cancellation.
+ * @param refresh - bypass the host's snapshot cache.
+ */
+export function fetchInventory(
+  routePath: string,
+  signal: AbortSignal,
+  refresh = false,
+): Promise<InventorySnapshot> {
+  const suffix = refresh ? '?refresh=1' : ''
+  return readBridge<InventorySnapshot>(`${routePath}/inventory${suffix}`, signal)
 }

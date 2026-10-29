@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
-import { callDestinyTool } from './mcp/client'
+import { getInventory } from './mcp/inventory'
 import { runInventoryQuery } from './mcp/queries'
 import type { BridgeResponse } from './mcp/types'
 
@@ -62,6 +62,13 @@ export function apply(ctx: Context, config: ConfigShape): void {
       try {
         if (query === '/characters') {
           const data = await runInventoryQuery(ctx, config.mcpServer, 'characters')
+          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
+          return
+        }
+        if (query === '/inventory') {
+          const data = await getInventory(ctx, config.mcpServer, {
+            force: url.searchParams.get('refresh') === '1',
+          })
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }
