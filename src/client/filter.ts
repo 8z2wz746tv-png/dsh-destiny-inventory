@@ -13,6 +13,9 @@ export type SortKey = 'power-desc' | 'name-asc' | 'type-asc'
 /** Lock-state filter. */
 export type LockFilter = 'all' | 'locked' | 'unlocked'
 
+/** Broad item class, the way the game splits a vault. */
+export type CategoryFilter = 'all' | 'weapon' | 'armor' | 'other'
+
 /** Everything the toolbar can narrow by. */
 export interface InventoryFilters {
   /** Free text matched against the localized name, case-insensitively. */
@@ -22,15 +25,22 @@ export interface InventoryFilters {
   lock: LockFilter
   /** Item location; `` means every location. */
   location: string
+  category: CategoryFilter
   sort: SortKey
 }
 
-/** Default view: everything, ordered by power. */
+/**
+ * Default view: the vault, ordered by power.
+ *
+ * The vault is 1295 of 1922 items, so it is both the thing worth opening first
+ * and the reason a single stacked list of every location does not work.
+ */
 export const DEFAULT_FILTERS: InventoryFilters = {
   search: '',
   type: '',
   lock: 'all',
-  location: '',
+  location: 'vault',
+  category: 'all',
   sort: 'power-desc',
 }
 
@@ -95,6 +105,7 @@ function bucketRank(bucket: string): number {
 export function matchesFilters(item: ItemRow, filters: InventoryFilters): boolean {
   if (filters.type !== '' && item.type !== filters.type) return false
   if (filters.location !== '' && item.location !== filters.location) return false
+  if (filters.category !== 'all' && item.kind !== filters.category) return false
   if (filters.lock === 'locked' && !item.locked) return false
   if (filters.lock === 'unlocked' && item.locked) return false
   const needle = filters.search.trim().toLowerCase()
@@ -164,6 +175,22 @@ export function availableTypes(items: ItemRow[]): string[] {
   const types = new Set<string>()
   for (const item of items) if (item.type !== '') types.add(item.type)
   return [...types].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+}
+
+/**
+ * Item counts per location, in display order — the numbers on the location tabs.
+ * @param items - the full snapshot rows.
+ */
+export function locationCounts(items: ItemRow[]): { value: string; label: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const item of items) counts.set(item.location, (counts.get(item.location) ?? 0) + 1)
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, label: LOCATION_ORDER[value]?.label ?? value, count }))
+    .sort(
+      (left, right) =>
+        (LOCATION_ORDER[left.value]?.rank ?? 99) - (LOCATION_ORDER[right.value]?.rank ?? 99) ||
+        left.value.localeCompare(right.value),
+    )
 }
 
 /**

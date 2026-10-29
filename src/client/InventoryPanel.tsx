@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { DragEvent, ReactElement } from 'react'
-import type { ActionReceipt, ActionRequest, InventorySnapshot, ItemDetailView, ItemRow, PlayerProfileView } from '../mcp/types'
+import type {
+  ActionReceipt,
+  ActionRequest,
+  InventorySnapshot,
+  ItemDetailView,
+  ItemRow,
+  PlayerProfileView,
+} from '../mcp/types'
 import { fetchCharacters, fetchInventory, postAction } from './api'
 import { ItemDetailCard } from './ItemDetail'
-import { DEFAULT_FILTERS, availableLocations, availableTypes, buildSections } from './filter'
-import type { InventoryFilters, SortKey } from './filter'
+import {
+  DEFAULT_FILTERS,
+  availableTypes,
+  buildSections,
+  locationCounts,
+} from './filter'
+import type { CategoryFilter, InventoryFilters, SortKey } from './filter'
 
 type LoadState =
   | { kind: 'loading' }
@@ -26,8 +38,21 @@ const SORTS: { value: SortKey; label: string }[] = [
   { value: 'type-asc', label: '类型' },
 ]
 
+/** The coarse split the game itself uses. */
+const CATEGORIES: { value: CategoryFilter; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'weapon', label: '武器' },
+  { value: 'armor', label: '护甲' },
+  { value: 'other', label: '杂项' },
+]
+
 /** Locations a drop can target: the vault and the three characters. */
-const DROP_TARGETS = new Set(['vault', 'hunter', 'warlock', 'titan'])
+const DROP_TARGETS: { value: string; label: string }[] = [
+  { value: 'hunter', label: '猎人' },
+  { value: 'warlock', label: '术士' },
+  { value: 'titan', label: '泰坦' },
+  { value: 'vault', label: '仓库' },
+]
 
 /** True when a location is a character the account can equip on. */
 function isCharacter(location: string): boolean {
@@ -35,13 +60,24 @@ function isCharacter(location: string): boolean {
 }
 
 /**
- * One inventory tile: icon, power, state marks. Draggable onto a location header.
- * @param props - the row and the click handler.
+ * One inventory tile: icon, power, state marks. Draggable onto the drop bar.
+ * @param props - the row, the click handler and the drag callbacks.
  */
-function ItemTile({ item, onOpen }: { item: ItemRow; onOpen: (item: ItemRow) => void }): ReactElement {
-  const onDragStart = (event: DragEvent<HTMLDivElement>): void => {
+function ItemTile({
+  item,
+  onOpen,
+  onDragStart,
+  onDragEnd,
+}: {
+  item: ItemRow
+  onOpen: (item: ItemRow) => void
+  onDragStart: (item: ItemRow) => void
+  onDragEnd: () => void
+}): ReactElement {
+  const handleDragStart = (event: DragEvent<HTMLDivElement>): void => {
     event.dataTransfer.setData('text/plain', item.id)
     event.dataTransfer.effectAllowed = 'move'
+    onDragStart(item)
   }
   return (
     <div
@@ -50,7 +86,8 @@ function ItemTile({ item, onOpen }: { item: ItemRow; onOpen: (item: ItemRow) => 
       data-locked={item.locked ? '1' : '0'}
       data-equipped={item.equipped ? '1' : '0'}
       draggable
-      onDragStart={onDragStart}
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
       onClick={() => onOpen(item)}
     >
       {item.icon === '' ? (
@@ -70,6 +107,9 @@ function ItemTile({ item, onOpen }: { item: ItemRow; onOpen: (item: ItemRow) => 
 
 /**
  * The inventory page mounted in the layout's keyed `main` slot.
+ *
+ * One location at a time: the vault alone is 1295 items, so stacking every
+ * location into one scroll buried the thing people open this page for.
  * @param props - the framework main-slot share plus this entry's injected face.
  */
 export function InventoryPanel({ routePath }: { routePath: string }): ReactElement {
@@ -79,6 +119,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const [receipts, setReceipts] = useState<ReceiptLine[]>([])
   const [pendingEquip, setPendingEquip] = useState<{ detail: ItemDetailView; summary: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [dragging, setDragging] = useState<ItemRow | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
   const load = useCallback((signal: AbortSignal, refresh: boolean): void => {
@@ -100,7 +141,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   }, [load])
 
   const pushReceipt = useCallback((ok: boolean, text: string, detail: string): void => {
-    setReceipts((current) => [{ id: Date.now() + Math.random(), ok, text, detail }, ...current].slice(0, 6))
+    setReceipts((current) => [{ id: Date.now() + Math.random(), ok, text, detail }, ...current].slice(0, 4))
   }, [])
 
   const runAction = useCallback(
@@ -113,8 +154,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           return receipt
         }
         pushReceipt(true, receipt.summary || summary, receipt.message)
-        const controller = new AbortController()
-        load(controller.signal, true)
+        load(new AbortController().signal, true)
         return receipt
       } catch (error) {
         pushReceipt(false, summary, error instanceof Error ? error.message : String(error))
@@ -129,25 +169,31 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const items = state.kind === 'ready' ? state.snapshot.items : []
   const sections = useMemo(() => buildSections(items, filters), [items, filters])
   const types = useMemo(() => availableTypes(items), [items])
-  const locations = useMemo(() => availableLocations(items), [items])
-  const visibleCount = sections.reduce((sum, section) => sum + section.itemCount, 0)
+  const tabs = useMemo(() => locationCounts(items), [items])
+  const currentSection = sections[0]
+  const visibleCount = currentSection?.itemCount ?? 0
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 
   const patch = (next: Partial<InventoryFilters>): void => setFilters((current) => ({ ...current, ...next }))
 
-  const onDrop = (event: DragEvent<HTMLElement>, location: string): void => {
+  const move = (item: ItemRow, destination: string): void => {
+    if (item.location === destination) return
+    const label = DROP_TARGETS.find((target) => target.value === destination)?.label ?? destination
+    void runAction(
+      { kind: 'move', instanceId: item.instanceId, destination },
+      item.name,
+      `把「${item.name}」移到${label}`,
+    )
+  }
+
+  const onDropBar = (event: DragEvent<HTMLButtonElement>, destination: string): void => {
     event.preventDefault()
     setDropTarget(null)
-    if (!DROP_TARGETS.has(location)) return
     const id = event.dataTransfer.getData('text/plain')
-    const item = itemById.get(id)
-    if (item === undefined) return
-    if (item.location === location) return
-    void runAction(
-      { kind: 'move', instanceId: item.instanceId, destination: location },
-      item.name,
-      `把「${item.name}」移到 ${location}`,
-    )
+    const item = itemById.get(id) ?? dragging
+    setDragging(null)
+    if (item === null || item === undefined) return
+    move(item, destination)
   }
 
   const onEquip = async (detail: ItemDetailView): Promise<void> => {
@@ -188,19 +234,36 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       detail.name,
       `${detail.locked ? '解锁' : '锁定'}「${detail.name}」`,
     )
-    if (detail.id === detailId) setDetailId(null)
+    setDetailId(null)
   }
 
   return (
     <div className="dsh-destiny-panel" data-dsh-destiny-view="">
-      {state.kind === 'ready' && (
-        <header className="dsh-destiny-panel__header">
-          <span className="dsh-destiny-panel__name">{state.profile.displayName}</span>
-          {state.profile.triumphScore !== null && (
-            <span className="dsh-destiny-panel__meta">凯旋分 {state.profile.triumphScore}</span>
-          )}
-        </header>
-      )}
+      <header className="dsh-destiny-panel__header">
+        {state.kind === 'ready' && (
+          <>
+            <span className="dsh-destiny-panel__name">{state.profile.displayName}</span>
+            {state.profile.triumphScore !== null && (
+              <span className="dsh-destiny-panel__meta">凯旋分 {state.profile.triumphScore}</span>
+            )}
+            <span className="dsh-destiny-panel__total">{state.snapshot.total} 件</span>
+          </>
+        )}
+      </header>
+
+      <nav className="dsh-destiny-tabs" aria-label="位置">
+        {tabs.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            className={`dsh-destiny-tab${filters.location === tab.value ? ' is-active' : ''}`}
+            onClick={() => patch({ location: tab.value })}
+          >
+            {tab.label}
+            <span className="dsh-destiny-tab__count">{tab.count}</span>
+          </button>
+        ))}
+      </nav>
 
       <div className="dsh-destiny-toolbar">
         <input
@@ -210,18 +273,18 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           value={filters.search}
           onChange={(event) => patch({ search: event.target.value })}
         />
-        <select
-          className="dsh-destiny-toolbar__select"
-          value={filters.location}
-          onChange={(event) => patch({ location: event.target.value })}
-        >
-          <option value="">全部位置</option>
-          {locations.map((location) => (
-            <option key={location.value} value={location.value}>
-              {location.label}
-            </option>
+        <div className="dsh-destiny-segmented">
+          {CATEGORIES.map((category) => (
+            <button
+              key={category.value}
+              type="button"
+              className={`dsh-destiny-segmented__item${filters.category === category.value ? ' is-active' : ''}`}
+              onClick={() => patch({ category: category.value })}
+            >
+              {category.label}
+            </button>
           ))}
-        </select>
+        </div>
         <select
           className="dsh-destiny-toolbar__select"
           value={filters.type}
@@ -243,12 +306,12 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           <option value="locked">已锁定</option>
           <option value="unlocked">未锁定</option>
         </select>
-        <div className="dsh-destiny-toolbar__sort">
+        <div className="dsh-destiny-segmented">
           {SORTS.map((sort) => (
             <button
               key={sort.value}
               type="button"
-              className={`dsh-destiny-toolbar__sortButton${filters.sort === sort.value ? ' is-active' : ''}`}
+              className={`dsh-destiny-segmented__item${filters.sort === sort.value ? ' is-active' : ''}`}
               onClick={() => patch({ sort: sort.value })}
             >
               {sort.label}
@@ -259,10 +322,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           type="button"
           className="dsh-destiny-toolbar__refresh"
           disabled={busy}
-          onClick={() => {
-            const controller = new AbortController()
-            load(controller.signal, true)
-          }}
+          onClick={() => load(new AbortController().signal, true)}
         >
           刷新
         </button>
@@ -270,6 +330,27 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           {state.kind === 'ready' ? `${visibleCount} / ${state.snapshot.total}` : ''}
         </span>
       </div>
+
+      {dragging !== null && (
+        <div className="dsh-destiny-dropbar">
+          <span className="dsh-destiny-dropbar__hint">把「{dragging.name}」移到</span>
+          {DROP_TARGETS.filter((target) => target.value !== dragging.location).map((target) => (
+            <button
+              key={target.value}
+              type="button"
+              className={`dsh-destiny-dropbar__target${dropTarget === target.value ? ' is-over' : ''}`}
+              onDragOver={(event) => {
+                event.preventDefault()
+                setDropTarget(target.value)
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => onDropBar(event, target.value)}
+            >
+              {target.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {state.kind === 'loading' && <p className="dsh-destiny-panel__state">正在读取仓库…</p>}
       {state.kind === 'error' && (
@@ -281,39 +362,31 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         </p>
       )}
       {state.kind === 'ready' && visibleCount === 0 && (
-        <p className="dsh-destiny-panel__state">没有符合当前筛选的物品。</p>
+        <p className="dsh-destiny-panel__state">这里没有符合当前筛选的物品。</p>
       )}
 
-      <div className="dsh-destiny-sections">
-        {sections.map((section) => (
-          <section key={section.location} className="dsh-destiny-section">
-            <h3
-              className={`dsh-destiny-section__title${dropTarget === section.location ? ' is-dropTarget' : ''}`}
-              onDragOver={(event) => {
-                if (!DROP_TARGETS.has(section.location)) return
-                event.preventDefault()
-                setDropTarget(section.location)
-              }}
-              onDragLeave={() => setDropTarget(null)}
-              onDrop={(event) => onDrop(event, section.location)}
-            >
-              {section.label}
-              <span className="dsh-destiny-section__count">{section.itemCount}</span>
-            </h3>
-            {section.buckets.map((bucket) => (
-              <div key={bucket.bucket} className="dsh-destiny-bucket">
-                <p className="dsh-destiny-bucket__title">
-                  {bucket.bucket}
-                  <span className="dsh-destiny-bucket__count">{bucket.items.length}</span>
-                </p>
-                <div className="dsh-destiny-grid">
-                  {bucket.items.map((item) => (
-                    <ItemTile key={item.id} item={item} onOpen={(row) => setDetailId(row.id)} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </section>
+      <div className="dsh-destiny-body">
+        {currentSection?.buckets.map((bucket) => (
+          <div key={bucket.bucket} className="dsh-destiny-bucket">
+            <p className="dsh-destiny-bucket__title">
+              {bucket.bucket}
+              <span className="dsh-destiny-bucket__count">{bucket.items.length}</span>
+            </p>
+            <div className="dsh-destiny-grid">
+              {bucket.items.map((item) => (
+                <ItemTile
+                  key={item.id}
+                  item={item}
+                  onOpen={(row) => setDetailId(row.id)}
+                  onDragStart={setDragging}
+                  onDragEnd={() => {
+                    setDragging(null)
+                    setDropTarget(null)
+                  }}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 

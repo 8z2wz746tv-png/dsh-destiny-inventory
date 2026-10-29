@@ -6,6 +6,7 @@ import {
   availableTypes,
   buildSections,
   compareItems,
+  locationCounts,
   matchesFilters,
 } from '../src/client/filter'
 
@@ -51,6 +52,20 @@ describe('matchesFilters', () => {
     expect(matchesFilters(locked, { ...DEFAULT_FILTERS, lock: 'unlocked' })).toBe(false)
   })
 
+  it('splits weapons from armor and from everything else', () => {
+    const weapon = row({ kind: 'weapon' })
+    const armor = row({ kind: 'armor' })
+    const misc = row({ kind: 'other' })
+    expect(matchesFilters(weapon, { ...DEFAULT_FILTERS, category: 'weapon' })).toBe(true)
+    expect(matchesFilters(armor, { ...DEFAULT_FILTERS, category: 'weapon' })).toBe(false)
+    expect(matchesFilters(misc, { ...DEFAULT_FILTERS, category: 'other' })).toBe(true)
+    expect(matchesFilters(weapon, { ...DEFAULT_FILTERS, category: 'all' })).toBe(true)
+  })
+
+  it('opens on the vault, which is where most of the account lives', () => {
+    expect(DEFAULT_FILTERS.location).toBe('vault')
+  })
+
   it('filters by type and location together', () => {
     const item = row({ type: '手炮', location: 'hunter' })
     expect(matchesFilters(item, { ...DEFAULT_FILTERS, type: '手炮', location: 'hunter' })).toBe(true)
@@ -78,7 +93,7 @@ describe('buildSections', () => {
   it('orders locations the way the game lists them', () => {
     const sections = buildSections(
       [row({ id: 'v', location: 'vault' }), row({ id: 'h', location: 'hunter' })],
-      DEFAULT_FILTERS,
+      { ...DEFAULT_FILTERS, location: '' },
     )
     expect(sections.map((section) => section.location)).toEqual(['hunter', 'vault'])
     expect(sections.map((section) => section.label)).toEqual(['猎人', '仓库'])
@@ -111,6 +126,22 @@ describe('buildSections', () => {
 
   it('returns nothing when every item is filtered out', () => {
     expect(buildSections([row({})], { ...DEFAULT_FILTERS, search: 'zzz' })).toEqual([])
+  })
+})
+
+describe('locationCounts', () => {
+  it('counts per location and keeps the game order', () => {
+    const counts = locationCounts([
+      row({ location: 'vault' }),
+      row({ location: 'vault' }),
+      row({ location: 'hunter' }),
+      row({ location: 'profile' }),
+    ])
+    expect(counts).toEqual([
+      { value: 'hunter', label: '猎人', count: 1 },
+      { value: 'vault', label: '仓库', count: 2 },
+      { value: 'profile', label: '账号', count: 1 },
+    ])
   })
 })
 
