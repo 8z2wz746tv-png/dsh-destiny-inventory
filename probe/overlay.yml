@@ -1,0 +1,18 @@
+# P0 探针 overlay：挂 destiny MCP + 探针插件。
+# 用法见 probe/README.md；只用于临时 profile，不碰 desktop。
+- insert:
+    - id: mcp-destiny
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: destiny
+        transport: stdio
+        command: /Users/husky/项目/destiny2-mcp/.venv/bin/destiny-mcp
+        args: []
+        cwd: /Users/husky/项目/destiny2-mcp
+        env:
+          DESTINY_MCP_ROOT: /Users/husky/项目/destiny2-mcp
+          DESTINY_MCP_WEBUI_PORT: '0'
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+    - id: dsh-probe-tools
+      name: dsh-probe-tools

@@ -1,6 +1,6 @@
 {
   "name": "dsh-destiny-inventory",
-  "version": "0.8.0",
+  "version": "0.30.1",
   "description": "Destiny 2 inventory and perk view for DeepSeek Harness, served through the destiny MCP.",
   "type": "module",
   "main": "lib/index.js",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ItemRow } from '../src/mcp/types'
+import type { SortKey } from '../src/client/filter'
 import {
   DEFAULT_FILTERS,
   STORE_COLUMNS,
@@ -19,15 +20,21 @@ function row(overrides: Partial<ItemRow>): ItemRow {
     name: '测试',
     kind: 'weapon',
     type: '手炮',
-    bucket: 'Vault (General)',
+    inventoryBucketHash: 1498876634,
+    bucket: '动能武器',
     power: 500,
-    equipped: false,
+    equipped: 'not_equipped',
     locked: false,
     quantity: 1,
     icon: '',
-    location: 'vault',
-    characterId: '',
+    placement: { kind: 'vault' },
+    locationKey: 'vault',
+    characterId: null,
     rarity: 'legendary',
+    gearTier: 5,
+    crafted: false,
+    watermark: '',
+    breakerType: 0,
     ...overrides,
   }
 }
@@ -81,11 +88,13 @@ describe('compareItems', () => {
 })
 
 describe('buildSections', () => {
-  it('lays out one row per type with a cell for every store', () => {
+  it('lays out one row per bucket with a cell for every store', () => {
     const sections = buildSections([row({ id: 'a' })], DEFAULT_FILTERS)
-    expect(sections[0].label).toBe('武器')
-    const rowData = sections[0].rows[0]
-    expect(rowData.label).toBe('手炮')
+    const weapons = sections.find((section) => section.id === 'weapons')!
+    expect(weapons.label).toBe('武器')
+    const rowData = weapons.rows[0]
+    // The row is the Manifest bucket (kinetic weapons), not the item type.
+    expect(rowData.label).toBe('动能武器')
     expect(rowData.cells.map((cell) => cell.location)).toEqual(
       STORE_COLUMNS.map((column) => column.location),
     )
@@ -95,30 +104,32 @@ describe('buildSections', () => {
   it('puts each item in its own store cell, not the first one', () => {
     const sections = buildSections(
       [
-        row({ id: 'h', location: 'hunter' }),
-        row({ id: 'v', location: 'vault' }),
-        row({ id: 'v2', location: 'vault' }),
+        row({ id: 'h', locationKey: 'hunter' }),
+        row({ id: 'v', locationKey: 'vault' }),
+        row({ id: 'v2', locationKey: 'vault' }),
       ],
       DEFAULT_FILTERS,
     )
-    const cells = sections[0].rows[0].cells
+    const cells = sections.find((section) => section.id === 'weapons')!.rows[0].cells
     expect(cells.find((cell) => cell.location === 'hunter')?.items.map((i) => i.id)).toEqual(['h'])
     expect(cells.find((cell) => cell.location === 'vault')?.items.map((i) => i.id)).toEqual(['v', 'v2'])
   })
 
   it('keeps empty store cells so the columns stay aligned', () => {
-    const sections = buildSections([row({ id: 'v', location: 'vault' })], DEFAULT_FILTERS)
-    expect(sections[0].rows[0].cells).toHaveLength(STORE_COLUMNS.length)
-    expect(sections[0].rows[0].cells.filter((cell) => cell.items.length === 0)).toHaveLength(3)
+    const sections = buildSections([row({ id: 'v', locationKey: 'vault' })], DEFAULT_FILTERS)
+    const weapons = sections.find((section) => section.id === 'weapons')!
+    expect(weapons.rows[0].cells).toHaveLength(STORE_COLUMNS.length)
+    expect(weapons.rows[0].cells.filter((cell) => cell.items.length === 0)).toHaveLength(3)
   })
 
   it("orders sections the way DIM's D2Categories does", () => {
+    // Classification comes from the bucket hash, so each fixture needs its own.
     const sections = buildSections(
       [
-        row({ id: 'p', location: 'postmaster', kind: 'other', type: '消耗品' }),
-        row({ id: 'g', kind: 'other', type: '术士分支职业' }),
-        row({ id: 'i', kind: 'other', type: '消耗品' }),
-        row({ id: 'a', kind: 'armor', type: '腿部护甲' }),
+        row({ id: 'p', locationKey: 'postmaster', kind: 'other', inventoryBucketHash: 215593132, bucket: '丢失物品' }),
+        row({ id: 'g', kind: 'other', inventoryBucketHash: 3284755031, bucket: '子职业' }),
+        row({ id: 'i', kind: 'other', inventoryBucketHash: 1469714392, bucket: '消耗品' }),
+        row({ id: 'a', kind: 'armor', type: '腿部护甲', inventoryBucketHash: 20886954, bucket: '腿部护甲' }),
         row({ id: 'w' }),
       ],
       DEFAULT_FILTERS,
@@ -126,9 +137,47 @@ describe('buildSections', () => {
     expect(sections.map((section) => section.label)).toEqual(['邮政官', '武器', '护甲', '通用', '物品'])
   })
 
-  it('puts subclass, artifact and ghost items in 通用, not 物品', () => {
+  it('keeps three weapon rows and five armor rows, like DIM', () => {
     const sections = buildSections(
-      [row({ id: 'a', kind: 'other', type: '神器' }), row({ id: 'b', kind: 'other', type: '机灵外壳' }), row({ id: 'c', kind: 'other', type: '消耗品' })],
+      [
+        row({ id: 'k', inventoryBucketHash: 1498876634, bucket: '动能武器' }),
+        row({ id: 'e', inventoryBucketHash: 2465295065, bucket: '能量武器' }),
+        row({ id: 'p', inventoryBucketHash: 953998645, bucket: '威能武器' }),
+        row({ id: 'h', kind: 'armor', inventoryBucketHash: 3448274439, bucket: '头盔' }),
+        row({ id: 'ga', kind: 'armor', inventoryBucketHash: 3551918588, bucket: '臂铠' }),
+        row({ id: 'c', kind: 'armor', inventoryBucketHash: 14239492, bucket: '胸部护甲' }),
+        row({ id: 'l', kind: 'armor', inventoryBucketHash: 20886954, bucket: '腿部护甲' }),
+        row({ id: 'cl', kind: 'armor', inventoryBucketHash: 1585787867, bucket: '职业护甲' }),
+      ],
+      DEFAULT_FILTERS,
+    )
+    const weapons = sections.find((section) => section.id === 'weapons')
+    const armor = sections.find((section) => section.id === 'armor')
+    expect(weapons?.rows.map((r) => r.label)).toEqual(['动能武器', '能量武器', '威能武器'])
+    expect(armor?.rows.map((r) => r.label)).toEqual(['头盔', '臂铠', '胸部护甲', '腿部护甲', '职业护甲'])
+  })
+
+  it('gives the worn item its own slot, ahead of the carried tiles', () => {
+    const sections = buildSections(
+      [
+        row({ id: 'carried', name: 'A 携带', equipped: 'not_equipped', locationKey: 'hunter' }),
+        row({ id: 'worn', name: 'Z 装备', equipped: 'equipped', locationKey: 'hunter', placement: { kind: 'equipped', characterId: 'c1', slotHash: 1498876634 } }),
+      ],
+      DEFAULT_FILTERS,
+    )
+    const cell = sections[0].rows[0].cells.find((c) => c.location === 'hunter')
+    // The worn item is a slot, not the first element of the carried list.
+    expect(cell?.equipped?.id).toBe('worn')
+    expect(cell?.items.map((item) => item.id)).toEqual(['carried'])
+  })
+
+  it('puts subclass, artifact and ghost buckets in 通用, not 物品', () => {
+    const sections = buildSections(
+      [
+        row({ id: 'a', kind: 'other', inventoryBucketHash: 1506418338, bucket: '神器' }),
+        row({ id: 'b', kind: 'other', inventoryBucketHash: 4023194814, bucket: '机灵外壳' }),
+        row({ id: 'c', kind: 'other', inventoryBucketHash: 1469714392, bucket: '消耗品' }),
+      ],
       DEFAULT_FILTERS,
     )
     const general = sections.find((section) => section.label === '通用')
@@ -137,22 +186,29 @@ describe('buildSections', () => {
     expect(inventory?.itemCount).toBe(1)
   })
 
-  it('orders types the way the game lists them', () => {
+  it('orders rows by bucket rank, not by insertion order', () => {
     const sections = buildSections(
-      [row({ id: 'a', type: '刀剑' }), row({ id: 'b', type: '手炮' }), row({ id: 'c', type: '自动步枪' })],
+      [
+        row({ id: 'p', inventoryBucketHash: 953998645, bucket: '威能武器' }),
+        row({ id: 'k', inventoryBucketHash: 1498876634, bucket: '动能武器' }),
+        row({ id: 'e', inventoryBucketHash: 2465295065, bucket: '能量武器' }),
+      ],
       DEFAULT_FILTERS,
     )
-    expect(sections[0].rows.map((r) => r.label)).toEqual(['手炮', '自动步枪', '刀剑'])
+    expect(sections[0].rows.map((r) => r.label)).toEqual(['动能武器', '能量武器', '威能武器'])
   })
 
-  it('gives account-wide sections one full-width cell instead of four', () => {
+  it('splits account-wide buckets by store, like every other category', () => {
+    // DIM has no full-width category: an account-level item simply lands in the
+    // vault column while the character columns stay empty.
     const sections = buildSections(
-      [row({ id: 'p', location: 'profile', kind: 'other', type: '消耗品' })],
+      [row({ id: 'p', locationKey: 'vault', kind: 'other', inventoryBucketHash: 1469714392, bucket: '消耗品' })],
       DEFAULT_FILTERS,
     )
     const inventory = sections.find((section) => section.id === 'inventory')
-    expect(inventory?.fullWidth).toBe(true)
-    expect(inventory?.rows[0].cells).toHaveLength(1)
+    expect(inventory?.rows[0].cells).toHaveLength(STORE_COLUMNS.length)
+    const vault = inventory?.rows[0].cells.find((cell) => cell.location === 'vault')
+    expect(vault?.items.map((item) => item.id)).toEqual(['p'])
   })
 
   it('drops filtered-out items from the counts, not just the render', () => {
@@ -178,15 +234,84 @@ describe('availableTypes / locationCounts', () => {
 
   it('counts per location in store order and skips empty ones', () => {
     const counts = locationCounts([
-      row({ location: 'vault' }),
-      row({ location: 'vault' }),
-      row({ location: 'hunter' }),
-      row({ location: 'profile' }),
+      row({ locationKey: 'vault' }),
+      row({ locationKey: 'vault' }),
+      row({ locationKey: 'hunter' }),
+      row({ locationKey: 'profile' }),
     ])
     expect(counts).toEqual([
       { value: 'hunter', label: '猎人', count: 1 },
       { value: 'vault', label: '仓库', count: 2 },
       { value: 'profile', label: '账号', count: 1 },
     ])
+  })
+})
+
+describe('sort modes keep the worn item pinned', () => {
+  /** Three hunter weapons: one worn (Z name, lowest power), two carried. */
+  const squad = [
+    row({ id: 'carriedC', name: 'C 携带', power: 550, equipped: 'not_equipped', locationKey: 'hunter', type: '手炮' }),
+    row({ id: 'carriedA', name: 'A 携带', power: 540, equipped: 'not_equipped', locationKey: 'hunter', type: '自动步枪' }),
+    row({
+      id: 'worn',
+      name: 'Z 装备',
+      power: 500,
+      equipped: 'equipped',
+      locationKey: 'hunter',
+      type: '刀剑',
+      placement: { kind: 'equipped', characterId: 'c1', slotHash: 1498876634 },
+    }),
+  ]
+
+  /** Worn slot first, then the carried list in the requested order. */
+  function hunterCell(sort: SortKey): string[] {
+    const sections = buildSections(squad, { ...DEFAULT_FILTERS, sort })
+    const cell = sections.find((section) => section.id === 'weapons')!.rows[0]!.cells.find((c) => c.location === 'hunter')
+    const carried = (cell?.items ?? []).map((item) => item.id)
+    return cell?.equipped === null || cell?.equipped === undefined ? carried : [cell.equipped.id, ...carried]
+  }
+
+  it('pins the worn item under name sort and orders the rest by name', () => {
+    expect(hunterCell('name-asc')).toEqual(['worn', 'carriedA', 'carriedC'])
+  })
+
+  it('pins the worn item under power sort and orders the rest by power', () => {
+    // Worn has the lowest power; it still leads, the carried pair keeps 550 > 540.
+    expect(hunterCell('power-desc')).toEqual(['worn', 'carriedC', 'carriedA'])
+  })
+
+  it('pins the worn item under type sort and orders the rest by type', () => {
+    // 手炮 < 自动步枪 in zh collation.
+    expect(hunterCell('type-asc')).toEqual(['worn', 'carriedC', 'carriedA'])
+  })
+})
+
+describe('layout modes', () => {
+  const items: ItemRow[] = [
+    row({ id: '1', instanceId: '1', hash: 1, name: '猎人枪', locationKey: 'hunter', placement: { kind: 'inventory', characterId: 'c1' }, characterId: 'c1' }),
+    row({ id: '2', instanceId: '2', hash: 2, name: '术士枪', locationKey: 'warlock', placement: { kind: 'inventory', characterId: 'c2' }, characterId: 'c2' }),
+    row({ id: '3', instanceId: '3', hash: 3, name: '仓库枪', locationKey: 'vault', placement: { kind: 'vault' }, characterId: null }),
+  ]
+
+  it('wide mode shows every character plus the vault', () => {
+    const sections = buildSections(items, DEFAULT_FILTERS, { layout: 'wide' })
+    const row = sections[0]!.rows[0]!
+    expect(row.cells.map((cell) => cell.location)).toEqual(['hunter', 'warlock', 'titan', 'vault'])
+    expect(row.cells.map((cell) => cell.items.length)).toEqual([1, 1, 0, 1])
+  })
+
+  it('medium mode keeps the active character and the vault', () => {
+    const sections = buildSections(items, DEFAULT_FILTERS, { layout: 'medium', activeCharacter: 'warlock' })
+    const row = sections[0]!.rows[0]!
+    expect(row.cells.map((cell) => cell.location)).toEqual(['warlock', 'vault'])
+    expect(row.cells[0]!.items.map((item) => item.name)).toEqual(['术士枪'])
+  })
+
+  it('narrow mode collapses every location into one column', () => {
+    const sections = buildSections(items, DEFAULT_FILTERS, { layout: 'narrow' })
+    const row = sections[0]!.rows[0]!
+    expect(row.cells).toHaveLength(1)
+    expect(row.cells[0]!.items).toHaveLength(3)
+    expect(row.cells[0]!.flex).toBe(true)
   })
 })

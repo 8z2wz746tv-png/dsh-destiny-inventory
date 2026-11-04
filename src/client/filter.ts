@@ -1,4 +1,5 @@
 import type { ItemRow } from '../mcp/types'
+import { ALWAYS_SHOWN, BUCKET_SECTIONS, bucketRank, sectionOfBucket } from './buckets'
 
 /**
  * Pure view logic for the inventory grid.
@@ -54,12 +55,32 @@ export const STORE_COLUMNS = [
   { location: 'vault', label: '仓库' },
 ] as const
 
+/** How wide the panel currently is; decides how many store columns fit. */
+export type LayoutMode = 'wide' | 'medium' | 'narrow'
+
+/** Options that change the shape (not the contents) of the page. */
+export interface SectionOptions {
+  /** wide = every character + vault; medium = active character + vault; narrow = one column. */
+  layout?: LayoutMode
+  /** Character shown in medium mode. */
+  activeCharacter?: string
+}
+
 /** One store's slice of a row. */
 export interface StoreCell {
   location: string
   label: string
   /** True for the flexible vault column. */
   flex: boolean
+  /**
+   * The item this store is wearing in this bucket, if any.
+   *
+   * DIM renders it in its own slot at the head of the cell; keeping it separate
+   * from `items` is what lets the view show "worn" as a slot rather than as a
+   * badge on whichever tile happened to sort first.
+   */
+  equipped: ItemRow | null
+  /** Everything else in this bucket. */
   items: ItemRow[]
 }
 
@@ -76,8 +97,6 @@ export interface CategorySection {
   label: string
   itemCount: number
   rows: TypeRow[]
-  /** True when the section renders as single full-width rows. */
-  fullWidth: boolean
 }
 
 /**
@@ -87,58 +106,66 @@ export interface CategorySection {
  * account-wide or belong to no single store, so splitting them into character
  * columns would invent a location the data does not have.
  */
-const SECTIONS: { id: string; label: string; fullWidth: boolean }[] = [
-  { id: 'postmaster', label: '邮政官', fullWidth: true },
-  { id: 'weapons', label: '武器', fullWidth: false },
-  { id: 'armor', label: '护甲', fullWidth: false },
-  { id: 'general', label: '通用', fullWidth: true },
-  { id: 'inventory', label: '物品', fullWidth: true },
-]
+/**
+ * Category order and labels, derived from the bucket table.
+ *
+ * There is deliberately no second copy here: buckets.ts owns which bucket lands
+ * in which category, this file only walks that order. Every category splits by
+ * store (DIM's DesktopStores), so a full-width category does not exist.
+ */
+const SECTIONS: { id: string; label: string }[] = BUCKET_SECTIONS.map(({ id, label }) => ({ id, label }))
 
-/** Types DIM keeps in General: subclass, artifact, ghost, emblems, ships, vehicle, emotes, finishers. */
-const GENERAL_TYPES = new Set([
-  '神器', '机灵外壳', '机灵投影', '徽标', '飞船', '载具', '表情',
-  '终结技', '终结技收藏', '动作收藏', '公会战旗', '武器皮肤', '护甲皮肤',
-])
-
-/** Types that belong to General by family rather than by exact name. */
-function isGeneralFamily(type: string): boolean {
-  return type.includes('分支职业') || type.includes('通用皮肤')
+/**
+ * The shelves that exist even when empty, as sections with no items.
+ *
+ * Deliberately outside `buildSections`: filtering answers "what matches", while
+ * the game always shows a mailbox and an engram shelf regardless. The view
+ * prepends these.
+ * @returns one section per always-shown bucket.
+ */
+export function emptyShelfSections(): CategorySection[] {
+  return SECTIONS.flatMap((meta) => {
+    const entries = ALWAYS_SHOWN[meta.id]
+    if (entries === undefined) return []
+    return [
+      {
+        id: meta.id,
+        label: meta.label,
+        itemCount: 0,
+        rows: entries.map((entry) => ({
+          label: entry.label,
+          itemCount: 0,
+          cells: STORE_COLUMNS.map((column) =>
+            makeCell(column.location, column.label, column.location === 'vault', []),
+          ),
+        })),
+      },
+    ]
+  })
 }
 
-/** Row order inside 武器, DIM's weapon buckets read top to bottom. */
-const WEAPON_ORDER = [
-  '手炮', '自动步枪', '脉冲步枪', '斥候步枪', '手枪', '微型冲锋枪',
-  '霰弹枪', '融合步枪', '线性融合步枪', '狙击步枪', '榴弹发射器',
-  '火箭发射器', '机枪', '刀剑', '偃月', '战斗弓箭', '追踪步枪',
-]
-
-/** Row order inside 护甲: helmet, gauntlets, chest, legs, class item. */
-const ARMOR_ORDER = ['头盔', '臂铠', '胸部护甲', '腿部护甲', '猎人披风', '泰坦印记', '术士臂环']
-
-/** Row order inside 通用 / 物品. */
-const OTHER_ORDER = [
-  '术士分支职业', '猎人分支职业', '泰坦分支职业', '神器',
-  '机灵外壳', '机灵投影', '徽标', '飞船', '载具', '表情', '终结技', '终结技收藏',
-  '动作收藏', '公会战旗', '武器皮肤', '护甲皮肤',
-  '消耗品', '材料', '货币', '模组', '目的地模组', '配件',
-  '任务步骤', '可兑换', '记忆水晶', '光明记忆水晶', '枪匠命令', '高塔命令',
-]
-
-/** Rank of one row label inside its section, unknown labels last. */
-function rowRank(section: string, label: string): number {
-  const order = section === 'weapons' ? WEAPON_ORDER : section === 'armor' ? ARMOR_ORDER : OTHER_ORDER
-  const index = order.indexOf(label)
-  return index === -1 ? order.length : index
-}
-
-/** Which DIM section an item belongs to. */
+/**
+ * Which DIM section an item belongs to.
+ *
+ * Decided by the Manifest bucket (DIM's `D2Categories`), not by item type: three
+ * weapon archetypes share the kinetic bucket, and a type-based row split them
+ * across rows that do not exist in either game or DIM.
+ * @param item - one inventory row.
+ */
 export function sectionOf(item: ItemRow): string {
-  if (item.location === 'postmaster') return 'postmaster'
-  if (item.kind === 'weapon') return 'weapons'
-  if (item.kind === 'armor') return 'armor'
-  if (GENERAL_TYPES.has(item.type) || isGeneralFamily(item.type)) return 'general'
-  return 'inventory'
+  if (item.placement.kind === 'postmaster') return 'postmaster'
+  return sectionOfBucket(item.inventoryBucketHash, item.kind)
+}
+
+/**
+ * Row label for one item's bucket.
+ * @param item - one inventory row.
+ * @returns the Manifest bucket name, or a hash marker when it is missing.
+ */
+export function rowLabelOf(item: ItemRow): string {
+  if (item.bucket !== null && item.bucket !== '') return item.bucket
+  if (item.inventoryBucketHash !== null) return `桶 #${item.inventoryBucketHash}`
+  return '未分类'
 }
 
 /**
@@ -158,6 +185,11 @@ export function matchesFilters(item: ItemRow, filters: InventoryFilters): boolea
 
 /** Comparator for one sort key; unknown power sorts last. */
 export function compareItems(a: ItemRow, b: ItemRow, sort: SortKey): number {
+  // DIM keeps the worn item at the head of its bucket cell: it is the one the
+  // player is actually using, the rest are candidates.
+  const worn = (item: ItemRow): number => (item.equipped === 'equipped' ? 0 : 1)
+  const byEquipped = worn(a) - worn(b)
+  if (byEquipped !== 0) return byEquipped
   if (sort === 'name-asc') return a.name.localeCompare(b.name, 'zh-Hans-CN')
   if (sort === 'type-asc') {
     const byType = a.type.localeCompare(b.type, 'zh-Hans-CN')
@@ -173,58 +205,109 @@ export function compareItems(a: ItemRow, b: ItemRow, sort: SortKey): number {
  * @param items - the full snapshot rows.
  * @param filters - current toolbar state.
  */
-export function buildSections(items: ItemRow[], filters: InventoryFilters): CategorySection[] {
+export function buildSections(
+  items: ItemRow[],
+  filters: InventoryFilters,
+  options: SectionOptions = {},
+): CategorySection[] {
+  const layout = options.layout ?? 'wide'
+  const activeCharacter = options.activeCharacter ?? 'hunter'
   const visible = items.filter((item) => matchesFilters(item, filters))
-  const bySection = new Map<string, Map<string, ItemRow[]>>()
+  const bySection = new Map<string, Map<number | null, { label: string; items: ItemRow[] }>>()
   for (const item of visible) {
     const section = sectionOf(item)
     let byRow = bySection.get(section)
     if (byRow === undefined) {
-      byRow = new Map<string, ItemRow[]>()
+      byRow = new Map()
       bySection.set(section, byRow)
     }
-    const label = item.type === '' ? '未分类' : item.type
-    const bucket = byRow.get(label)
-    if (bucket === undefined) byRow.set(label, [item])
-    else bucket.push(item)
+    const key = item.inventoryBucketHash
+    const row = byRow.get(key)
+    if (row === undefined) byRow.set(key, { label: rowLabelOf(item), items: [item] })
+    else row.items.push(item)
   }
 
   const sections: CategorySection[] = []
   for (const meta of SECTIONS) {
     const byRow = bySection.get(meta.id)
     if (byRow === undefined) continue
+
+    if (meta.id === 'postmaster') {
+      // The mailbox is one 21-slot shelf: mail is not grouped by item type the
+      // way weapons and armor are.
+      const mail = [...byRow.values()]
+        .flatMap((entry) => entry.items)
+        .sort((a, b) => compareItems(a, b, filters.sort))
+      sections.push({
+        id: meta.id,
+        label: meta.label,
+        itemCount: mail.length,
+        rows: [
+          {
+            label: '邮政官',
+            itemCount: mail.length,
+            cells: buildCells(mail, layout, activeCharacter),
+          },
+        ],
+      })
+      continue
+    }
+
     const rows: TypeRow[] = [...byRow.entries()]
       .sort(
-        ([left], [right]) =>
-          rowRank(meta.id, left) - rowRank(meta.id, right) ||
-          left.localeCompare(right, 'zh-Hans-CN'),
+        ([leftHash], [rightHash]) =>
+          bucketRank(leftHash) - bucketRank(rightHash) || (leftHash ?? 0) - (rightHash ?? 0),
       )
-      .map(([label, rowItems]) => {
+      .map(([, { label, items: rowItems }]) => {
         const sorted = [...rowItems].sort((a, b) => compareItems(a, b, filters.sort))
-        if (meta.fullWidth) {
-          return {
-            label,
-            itemCount: sorted.length,
-            cells: [{ location: meta.id, label: meta.label, flex: true, items: sorted }],
-          }
-        }
-        const cells: StoreCell[] = STORE_COLUMNS.map((column) => ({
-          location: column.location,
-          label: column.label,
-          flex: column.location === 'vault',
-          items: sorted.filter((item) => item.location === column.location),
-        }))
-        return { label, itemCount: sorted.length, cells }
+        return { label, itemCount: sorted.length, cells: buildCells(sorted, layout, activeCharacter) }
       })
     sections.push({
       id: meta.id,
       label: meta.label,
       itemCount: rows.reduce((sum, row) => sum + row.itemCount, 0),
       rows,
-      fullWidth: meta.fullWidth,
     })
   }
   return sections
+}
+
+/**
+ * Split one row into store cells according to the panel's current width.
+ *
+ * Narrow mode collapses every location into one column: in a side panel there is
+ * not enough width to compare three characters, and a single column reads better
+ * than three cramped ones. Medium keeps the active character next to the vault —
+ * the two things a drag actually moves between.
+ * @param sorted - the row's items, already ordered.
+ * @param layout - current width class.
+ * @param activeCharacter - which character column medium mode shows.
+ */
+function makeCell(location: string, label: string, flex: boolean, items: ItemRow[]): StoreCell {
+  const equipped = items.find((item) => item.equipped === 'equipped') ?? null
+  return {
+    location,
+    label,
+    flex,
+    equipped,
+    items: equipped === null ? items : items.filter((item) => item !== equipped),
+  }
+}
+
+export function buildCells(sorted: ItemRow[], layout: LayoutMode, activeCharacter: string): StoreCell[] {
+  if (layout === 'narrow') {
+    return [makeCell('all', '全部', true, sorted)]
+  }
+  if (layout === 'medium') {
+    const active = STORE_COLUMNS.find((column) => column.location === activeCharacter) ?? STORE_COLUMNS[0]
+    return [
+      makeCell(active.location, active.label, false, sorted.filter((item) => item.locationKey === active.location)),
+      makeCell('vault', '仓库', true, sorted.filter((item) => item.locationKey === 'vault')),
+    ]
+  }
+  return STORE_COLUMNS.map((column) =>
+    makeCell(column.location, column.label, column.location === 'vault', sorted.filter((item) => item.locationKey === column.location)),
+  )
 }
 
 /**
@@ -248,7 +331,7 @@ export function locationCounts(items: ItemRow[]): { value: string; label: string
     { value: 'postmaster', label: '邮政官', rank: 6 },
   ]
   const counts = new Map<string, number>()
-  for (const item of items) counts.set(item.location, (counts.get(item.location) ?? 0) + 1)
+  for (const item of items) counts.set(item.locationKey, (counts.get(item.locationKey) ?? 0) + 1)
   return grouped
     .map((entry) => ({ value: entry.value, label: entry.label, count: counts.get(entry.value) ?? 0 }))
     .filter((entry) => entry.count > 0)

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useHoverCard } from './use-hover-card'
 import type { DragEvent, ReactElement } from 'react'
 import type {
   ActionReceipt,
@@ -9,10 +10,12 @@ import type {
   ItemRow,
   PlayerProfileView,
 } from '../mcp/types'
-import { fetchCharacters, fetchInventory, postAction } from './api'
+import { fetchCharacters, fetchInventory, postAction, prefetchItemDetail } from './api'
 import { ItemDetailCard } from './ItemDetail'
-import { DEFAULT_FILTERS, availableTypes, buildSections } from './filter'
-import type { CategoryFilter, InventoryFilters, SortKey, StoreCell } from './filter'
+import { DEFAULT_FILTERS, STORE_COLUMNS, availableTypes, buildSections, emptyShelfSections } from './filter'
+import { InventoryToolbar } from './InventoryToolbar'
+import { ItemTile } from './ItemTile'
+import type { CategoryFilter, InventoryFilters, LayoutMode, SortKey, StoreCell, TypeRow } from './filter'
 
 type LoadState =
   | { kind: 'loading' }
@@ -26,18 +29,7 @@ interface ReceiptLine {
   detail: string
 }
 
-const SORTS: { value: SortKey; label: string }[] = [
-  { value: 'power-desc', label: '光等' },
-  { value: 'name-asc', label: '名称' },
-  { value: 'type-asc', label: '类型' },
-]
 
-const CATEGORIES: { value: CategoryFilter; label: string }[] = [
-  { value: 'all', label: '全部' },
-  { value: 'weapon', label: '武器' },
-  { value: 'armor', label: '护甲' },
-  { value: 'other', label: '杂项' },
-]
 
 const CLASS_LOCATION: Record<number, string> = { 0: 'titan', 1: 'hunter', 2: 'warlock' }
 const BUNGIE_ORIGIN = 'https://www.bungie.net'
@@ -51,82 +43,6 @@ function cls(...parts: (string | false | undefined)[]): string {
   return parts.filter(Boolean).join(' ')
 }
 
-function ItemTile({
-  item,
-  onOpen,
-  onDragStart,
-  onDragEnd,
-}: {
-  item: ItemRow
-  onOpen: (item: ItemRow) => void
-  onDragStart: (item: ItemRow) => void
-  onDragEnd: () => void
-}): ReactElement {
-  const handleDragStart = (event: DragEvent<HTMLDivElement>): void => {
-    event.dataTransfer.setData('text/plain', item.id)
-    event.dataTransfer.effectAllowed = 'move'
-    onDragStart(item)
-  }
-  const tooltip = item.type === '' ? item.name : item.name + ' · ' + item.type
-  return (
-    <div
-      className={cls('dsh-destiny-tile', 'r-' + item.rarity)}
-      title={tooltip}
-      data-locked={item.locked ? '1' : '0'}
-      data-equipped={item.equipped ? '1' : '0'}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
-      onClick={() => onOpen(item)}
-    >
-      {item.icon === '' ? (
-        <div className="dsh-destiny-tile__icon" />
-      ) : (
-        <img className="dsh-destiny-tile__icon" src={item.icon} alt="" loading="lazy" decoding="async" />
-      )}
-      <span className="dsh-destiny-tile__power">{item.power ?? '—'}</span>
-      {item.locked && (
-        <span className="dsh-destiny-tile__lock" aria-hidden="true">
-          🔒
-        </span>
-      )}
-      {item.equipped && <span className="dsh-destiny-tile__worn" aria-hidden="true" />}
-    </div>
-  )
-}
-
-function StoreCard({
-  label,
-  count,
-  character,
-}: {
-  label: string
-  count: number
-  character?: CharacterRow
-}): ReactElement {
-  const emblem =
-    character?.emblemPath != null && character.emblemPath !== ''
-      ? BUNGIE_ORIGIN + character.emblemPath
-      : undefined
-  return (
-    <div className="dsh-destiny-store">
-      {emblem !== undefined && (
-        <>
-          <img className="dsh-destiny-store__emblem" src={emblem} alt="" />
-          <span className="dsh-destiny-store__wash" aria-hidden="true" />
-        </>
-      )}
-      <span className="dsh-destiny-store__body">
-        <span className="dsh-destiny-store__label">{label}</span>
-        <span className="dsh-destiny-store__stats">
-          {character !== undefined ? '光等 ' + character.light : count + ' 件'}
-        </span>
-      </span>
-      {character !== undefined && <span className="dsh-destiny-store__count">{count}</span>}
-    </div>
-  )
-}
-
 /**
  * The inventory page mounted in the layout's keyed main slot.
  *
@@ -134,15 +50,92 @@ function StoreCard({
  * and inside each row one cell per store (characters fixed, vault flexible), so
  * the same gun can be compared across stores without changing pages.
  */
+function StoreCard({
+  label,
+  count,
+  character,
+  active,
+  onPick,
+}: {
+  label: string
+  count: number
+  character?: CharacterRow
+  active?: boolean
+  onPick?: () => void
+}): ReactElement {
+  // The wide name-card banner is the backdrop; the emblem itself is a small
+  // square icon and belongs in a corner, not stretched across the card.
+  const banner =
+    character?.emblemBackground != null && character.emblemBackground !== ''
+      ? BUNGIE_ORIGIN + character.emblemBackground
+      : undefined
+  return (
+    <button
+      type="button"
+      className={cls('dsh-destiny-store', active && 'is-active')}
+      onClick={onPick}
+      disabled={onPick === undefined}
+    >
+      {banner !== undefined && <img className="dsh-destiny-store__banner" src={banner} alt="" />}
+      {banner !== undefined && <span className="dsh-destiny-store__wash" aria-hidden="true" />}
+      <span className="dsh-destiny-store__body">
+        <span className="dsh-destiny-store__label">{label}</span>
+        {character !== undefined && character.title !== '' ? (
+          <span className="dsh-destiny-store__title">{character.title}</span>
+        ) : (
+          <span className="dsh-destiny-store__stats">
+            {character !== undefined ? '' : count + ' 件'}
+          </span>
+        )}
+      </span>
+      {character !== undefined && (
+        <>
+          <span className="dsh-destiny-store__light">
+            <i aria-hidden="true" />
+            {character.light}
+          </span>
+        </>
+      )}
+    </button>
+  )
+}
+
 export function InventoryPanel({ routePath }: { routePath: string }): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [filters, setFilters] = useState<InventoryFilters>(DEFAULT_FILTERS)
-  const [detailId, setDetailId] = useState<string | null>(null)
+  const hoverCard = useHoverCard()
+  const overlays = state.kind === 'ready' ? state.snapshot.overlays : undefined
   const [receipts, setReceipts] = useState<ReceiptLine[]>([])
   const [pendingEquip, setPendingEquip] = useState<{ detail: ItemDetailView; summary: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState<ItemRow | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  /** Width class of the panel: a side panel is not a full-screen DIM. */
+  const [layout, setLayout] = useState<LayoutMode>('wide')
+  /** Which character column medium mode shows; also the single-character mode. */
+  const [activeCharacter, setActiveCharacter] = useState('hunter')
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * Warm every detail after the grid is on screen.
+   *
+   * DIM never makes the pointer wait because it builds every item up front; we
+   * keep the per-item read but pull them in during idle time so a hover almost
+   * always lands on a warm entry. Failures are ignored, the card refetches.
+   */
+  useEffect(() => {
+    if (state.kind !== 'ready') return
+    const ids = state.snapshot.items.map((item) => item.id)
+    let index = 0
+    let timer = 0
+    const pump = (): void => {
+      const end = Math.min(index + 12, ids.length)
+      for (; index < end; index++) prefetchItemDetail(routePath, ids[index] as string)
+      if (index < ids.length) timer = window.setTimeout(pump, 120)
+    }
+    timer = window.setTimeout(pump, 400)
+    return () => window.clearTimeout(timer)
+  }, [routePath, state])
 
   const load = useCallback((signal: AbortSignal, refresh: boolean): void => {
     Promise.all([fetchInventory(routePath, signal, refresh), fetchCharacters(routePath, signal)]).then(
@@ -161,6 +154,22 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     load(controller.signal, false)
     return () => controller.abort()
   }, [load])
+
+  // Measure the panel itself, not the viewport: the sidebar owns the difference
+  // and the same window can host a wide page or a narrow one.
+  useEffect(() => {
+    const node = panelRef.current
+    if (node === null) return
+    const apply = (width: number): void => {
+      setLayout(width < 640 ? 'narrow' : width < 1024 ? 'medium' : 'wide')
+    }
+    apply(node.getBoundingClientRect().width)
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) apply(entry.contentRect.width)
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   const pushReceipt = useCallback((ok: boolean, text: string, detail: string): void => {
     setReceipts((current) => [{ id: Date.now() + Math.random(), ok, text, detail }, ...current].slice(0, 3))
@@ -190,7 +199,25 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   const items = state.kind === 'ready' ? state.snapshot.items : []
   const profile = state.kind === 'ready' ? state.profile : undefined
-  const sections = useMemo(() => buildSections(items, filters), [items, filters])
+  const sections = useMemo(
+    () => buildSections(items, filters, { layout, activeCharacter }),
+    [items, filters, layout, activeCharacter],
+  )
+  /**
+   * Page order with the always-present shelves filled in.
+   *
+   * The mailbox and the engram shelf appear whether or not they hold anything,
+   * exactly like the game; every other category only shows up with items.
+   */
+  const displaySections = useMemo(() => {
+    const shelves = new Map(emptyShelfSections().map((section) => [section.id, section]))
+    const byId = new Map(sections.map((section) => [section.id, section]))
+    const order = ['postmaster', 'engrams', 'weapons', 'armor', 'general', 'inventory']
+    return order
+      .map((id) => byId.get(id) ?? shelves.get(id))
+      .filter((section): section is (typeof sections)[number] => section !== undefined)
+  }, [sections])
+
   const types = useMemo(() => availableTypes(items), [items])
   const visibleCount = sections.reduce((sum, section) => sum + section.itemCount, 0)
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
@@ -215,7 +242,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       postmaster: '邮政官',
     }
     const counts = new Map<string, number>()
-    for (const item of items) counts.set(item.location, (counts.get(item.location) ?? 0) + 1)
+    for (const item of items) counts.set(item.locationKey, (counts.get(item.locationKey) ?? 0) + 1)
     return order
       .filter((location) => (counts.get(location) ?? 0) > 0)
       .map((location) => ({
@@ -229,7 +256,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const patch = (next: Partial<InventoryFilters>): void => setFilters((current) => ({ ...current, ...next }))
 
   const move = (item: ItemRow, destination: string): void => {
-    if (item.location === destination) return
+    if (item.locationKey === destination) return
     const label = destination === 'vault' ? '仓库' : destination
     void runAction(
       { kind: 'move', instanceId: item.instanceId, destination },
@@ -286,84 +313,113 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       detail.name,
       (detail.locked ? '解锁' : '锁定') + '「' + detail.name + '」',
     )
-    setDetailId(null)
+    hoverCard.close()
   }
 
+  /** One store cell: the worn slot, then the carried tiles. */
+  const renderCell = (cell: StoreCell, shelf?: { id: string; capacity: number }): ReactElement => (
+    <div
+      key={cell.location}
+      className={cls('dsh-destiny-cell', cell.flex && 'is-flex', dropTarget === cell.location && 'is-over')}
+      data-shelf={shelf?.id}
+      onDragOver={(event) => {
+        if (dragging === null) return
+        event.preventDefault()
+        setDropTarget(cell.location)
+      }}
+      onDragLeave={() => setDropTarget(null)}
+      onDrop={(event) => onCellDrop(event, cell)}
+    >
+      {cell.equipped !== null && (
+        <div className="dsh-destiny-cell__worn">
+          <ItemTile
+            item={cell.equipped}
+            compact={shelf?.id === 'engrams'}
+            overlays={overlays}
+                        onHover={(picked) => hoverCard.show(picked, false)}
+            onPin={(picked) => hoverCard.show(picked, true)}
+            onLeave={hoverCard.closeSoon}
+            onDragStart={setDragging}
+            onDragEnd={() => {
+              setDragging(null)
+              setDropTarget(null)
+            }}
+          />
+        </div>
+      )}
+      <div className="dsh-destiny-cell__rest">
+        {cell.items.map((item) => (
+          <ItemTile
+            key={item.id}
+            item={item}
+            compact={shelf?.id === 'engrams'}
+            overlays={overlays}
+                        onHover={(picked) => hoverCard.show(picked, false)}
+            onPin={(picked) => hoverCard.show(picked, true)}
+            onLeave={hoverCard.closeSoon}
+            onDragStart={setDragging}
+            onDragEnd={() => {
+              setDragging(null)
+              setDropTarget(null)
+            }}
+          />
+        ))}
+        {shelf !== undefined &&
+          cell.location !== 'vault' &&
+          Array.from(
+            { length: Math.max(0, shelf.capacity - cell.items.length - (cell.equipped === null ? 0 : 1)) },
+            (_, index) => (
+              <span
+                key={'empty-' + index}
+                className={cls('dsh-destiny-engram-empty', shelf.id === 'postmaster' && 'is-tile')}
+                aria-hidden="true"
+              />
+            ),
+          )}
+      </div>
+    </div>
+  )
+
   return (
-    <div className="dsh-destiny-panel" data-dsh-destiny-view="">
+    <div className="dsh-destiny-panel" data-dsh-destiny-view="" ref={panelRef}>
       <div className="dsh-destiny-stores">
         {storeCards.map((card) => (
-          <StoreCard key={card.location} label={card.label} count={card.count} character={card.character} />
+          <StoreCard
+            key={card.location}
+            label={card.label}
+            count={card.count}
+            character={card.character}
+            active={layout !== 'wide' && card.location === activeCharacter}
+            onPick={
+              layout === 'wide' || card.location === 'vault'
+                ? undefined
+                : () => setActiveCharacter(card.location)
+            }
+          />
         ))}
       </div>
 
-      <div className="dsh-destiny-toolbar">
-        <input
-          className="dsh-destiny-toolbar__search"
-          type="search"
-          placeholder="搜索名称"
-          value={filters.search}
-          onChange={(event) => patch({ search: event.target.value })}
-        />
-        <div className="dsh-destiny-segmented">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.value}
-              type="button"
-              className={cls('dsh-destiny-segmented__item', filters.category === category.value && 'is-active')}
-              onClick={() => patch({ category: category.value })}
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
-        <select
-          className="dsh-destiny-toolbar__select"
-          value={filters.type}
-          onChange={(event) => patch({ type: event.target.value })}
-        >
-          <option value="">全部类型</option>
-          {types.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
-        <select
-          className="dsh-destiny-toolbar__select"
-          value={filters.lock}
-          onChange={(event) => patch({ lock: event.target.value as InventoryFilters['lock'] })}
-        >
-          <option value="all">锁定状态</option>
-          <option value="locked">已锁定</option>
-          <option value="unlocked">未锁定</option>
-        </select>
-        <div className="dsh-destiny-segmented">
-          {SORTS.map((sort) => (
-            <button
-              key={sort.value}
-              type="button"
-              className={cls('dsh-destiny-segmented__item', filters.sort === sort.value && 'is-active')}
-              onClick={() => patch({ sort: sort.value })}
-            >
-              {sort.label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="dsh-destiny-toolbar__refresh"
-          disabled={busy}
-          onClick={() => load(new AbortController().signal, true)}
-        >
-          刷新
-        </button>
-        <span className="dsh-destiny-toolbar__count">
-          {state.kind === 'ready' ? visibleCount + ' / ' + state.snapshot.total : ''}
-        </span>
-      </div>
+      <InventoryToolbar
+        filters={filters}
+        types={types}
+        countLabel={state.kind === 'ready' ? visibleCount + ' / ' + state.snapshot.total : ''}
+        busy={busy}
+        onPatch={patch}
+        onRefresh={() => load(new AbortController().signal, true)}
+      />
 
-      {state.kind === 'loading' && <p className="dsh-destiny-panel__state">正在读取仓库…</p>}
+      {state.kind === 'loading' && (
+        <div className="dsh-destiny-skeleton" aria-hidden="true">
+          {Array.from({ length: 4 }, (_, rowIndex) => (
+            <div key={rowIndex} className="dsh-destiny-skeleton__row">
+              {Array.from({ length: 12 }, (_, tileIndex) => (
+                <div key={tileIndex} className="dsh-destiny-skeleton__tile" />
+              ))}
+            </div>
+          ))}
+          <p className="dsh-destiny-panel__state">正在读取仓库…</p>
+        </div>
+      )}
       {state.kind === 'error' && (
         <p className="dsh-destiny-panel__state dsh-destiny-panel__state--error">{state.message}</p>
       )}
@@ -377,45 +433,28 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       )}
 
       <div className="dsh-destiny-body">
-        {sections.map((section) => (
+        {displaySections.map((section) => (
           <section key={section.id} className="dsh-destiny-section">
             <h3 className="dsh-destiny-section__title">
               {section.label}
               <span className="dsh-destiny-section__count">{section.itemCount}</span>
             </h3>
             {section.rows.map((row) => (
-              <div key={row.label} className={cls('dsh-destiny-row', section.fullWidth && 'is-full')}>
-                <p className="dsh-destiny-row__label">{row.label}</p>
-                {row.cells.map((cell) => (
-                  <div
-                    key={cell.location}
-                    className={cls(
-                      'dsh-destiny-cell',
-                      cell.flex && 'is-flex',
-                      dropTarget === cell.location && 'is-over',
-                    )}
-                    onDragOver={(event) => {
-                      if (dragging === null) return
-                      event.preventDefault()
-                      setDropTarget(cell.location)
-                    }}
-                    onDragLeave={() => setDropTarget(null)}
-                    onDrop={(event) => onCellDrop(event, cell)}
-                  >
-                    {cell.items.map((item) => (
-                      <ItemTile
-                        key={item.id}
-                        item={item}
-                        onOpen={(picked) => setDetailId(picked.id)}
-                        onDragStart={setDragging}
-                        onDragEnd={() => {
-                          setDragging(null)
-                          setDropTarget(null)
-                        }}
-                      />
-                    ))}
-                  </div>
-                ))}
+              <div
+                key={row.label}
+                className="dsh-destiny-row"
+                title={row.label}
+              >
+                {row.cells.map((cell) =>
+                  renderCell(
+                    cell,
+                    section.id === 'engrams'
+                      ? { id: 'engrams', capacity: 10 }
+                      : section.id === 'postmaster'
+                        ? { id: 'postmaster', capacity: 21 }
+                        : undefined,
+                  ),
+                )}
               </div>
             ))}
           </section>
@@ -433,13 +472,14 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         </div>
       )}
 
-      {detailId !== null && (
+      {hoverCard.target !== null && (
         <ItemDetailCard
           routePath={routePath}
-          itemId={detailId}
-          onClose={() => setDetailId(null)}
-          onEquip={(detail) => void onEquip(detail)}
-          onToggleLock={(detail) => void onToggleLock(detail)}
+          itemId={hoverCard.target.id}
+          anchor={hoverCard.target.anchor}
+          onEnter={hoverCard.keepOpen}
+          onLeave={hoverCard.closeSoon}
+          onClose={hoverCard.close}
         />
       )}
 

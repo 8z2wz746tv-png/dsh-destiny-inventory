@@ -90,6 +90,62 @@ export function fetchItemDetail(
 }
 
 /**
+ * Cache of detail reads, keyed by route + item id.
+ *
+ * DIM builds every item up front and draws from memory, so hovering never waits.
+ * We keep the host as the source (one request per item) but memoise it here and
+ * warm the cache ahead of the pointer, which gets the same feel without shipping
+ * every socket in the first payload.
+ */
+const detailCache = new Map<string, Promise<ItemDetailView>>()
+
+/** Cache key: the route scopes the cache to one bridge. */
+function cacheKey(routePath: string, id: string): string {
+  return `${routePath}|${id}`
+}
+
+/**
+ * Detail with memoisation: the first caller fetches, everyone after joins it.
+ * @param routePath - bridge base pathname.
+ * @param id - snapshot row id.
+ * @param signal - caller-owned cancellation; a cancelled read is not cached.
+ */
+export function readItemDetailCached(
+  routePath: string,
+  id: string,
+  signal: AbortSignal,
+): Promise<ItemDetailView> {
+  const key = cacheKey(routePath, id)
+  const cached = detailCache.get(key)
+  if (cached !== undefined) return cached
+  const pending = fetchItemDetail(routePath, id, signal).catch((error: unknown) => {
+    // A failed or cancelled read must not poison the cache.
+    detailCache.delete(key)
+    throw error
+  })
+  detailCache.set(key, pending)
+  return pending
+}
+
+/**
+ * Warm the cache for one item, ignoring failures.
+ *
+ * Called from an idle loop so the work never competes with the grid's own
+ * rendering; a miss simply means the hover falls back to a normal request.
+ * @param routePath - bridge base pathname.
+ * @param id - snapshot row id.
+ */
+export function prefetchItemDetail(routePath: string, id: string): void {
+  const key = cacheKey(routePath, id)
+  if (detailCache.has(key)) return
+  const pending = fetchItemDetail(routePath, id, new AbortController().signal).catch(() => {
+    detailCache.delete(key)
+    return undefined as unknown as ItemDetailView
+  })
+  detailCache.set(key, pending)
+}
+
+/**
  * Ask the host to run one account write.
  * @param routePath - bridge base pathname.
  * @param request - what to do.

@@ -1,0 +1,10 @@
+{
+  "name": "dsh-probe-tools",
+  "version": "0.0.1",
+  "private": true,
+  "description": "P0-a/P0-b probe: log tools/pre-execute and tools/post-execute, prove session identity and await safety.",
+  "type": "module",
+  "main": "lib/index.js",
+  "dsh": { "manifestVersion": 1 },
+  "files": ["lib"]
+}

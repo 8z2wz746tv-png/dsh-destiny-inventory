@@ -10,6 +10,27 @@
 /** The rarities the tool can filter on, plus the honest remainder. */
 export type ItemRarity = 'exotic' | 'legendary' | 'rare' | 'unknown'
 
+/**
+ * Whether an instance is worn right now.
+ *
+ * `unknown` is a first-class state: when component 205 did not load we cannot
+ * tell equipped from carried, and pretending otherwise would silently turn the
+ * whole account into "nothing is equipped".
+ */
+export type EquippedState = 'equipped' | 'not_equipped' | 'unknown'
+
+/**
+ * Where one instance sits right now.
+ *
+ * Position comes from *which profile component delivered the row*, never from a
+ * hash: the platform reports the same `bucketHash` for every vault item.
+ */
+export type ItemPlacement =
+  | { kind: 'equipped'; characterId: string; slotHash: number }
+  | { kind: 'inventory'; characterId: string }
+  | { kind: 'vault' }
+  | { kind: 'postmaster'; characterId: string | null }
+
 /** One character as the inventory view needs it. */
 export interface CharacterRow {
   characterId: string
@@ -19,6 +40,10 @@ export interface CharacterRow {
   className: string
   light: number
   emblemPath: string | null
+  /** Wide name-card banner; the class card paints this, falling back to nothing. */
+  emblemBackground: string | null
+  /** Seal title the character displays (e.g. 魅痕克星); empty when none. */
+  title: string
   lastPlayed: string | null
 }
 
@@ -53,15 +78,27 @@ export interface ItemRow {
   kind: 'weapon' | 'armor' | 'other'
   /** Localized item type, e.g. 手炮 / 腿部护甲. */
   type: string
-  /** Inventory bucket the item sits in, e.g. Kinetic Weapons. */
-  bucket: string
+  /**
+   * Classification bucket, from Manifest `inventory.bucketTypeHash`.
+   * `null` when the definition is missing — never a placeholder string.
+   */
+  inventoryBucketHash: number | null
+  /** Localized bucket name from the Manifest; `null` when the definition is missing. */
+  bucket: string | null
   power: number | null
-  equipped: boolean
+  equipped: EquippedState
   locked: boolean
   quantity: number
   icon: string
-  location: ItemLocation
-  characterId: string
+  /** Full position semantics. */
+  placement: ItemPlacement
+  /**
+   * Display key derived from `placement`: `vault`, `postmaster`, or the owner's
+   * class key. Kept so the grid does not need the character table; it carries no
+   * meaning that `placement` does not already have.
+   */
+  locationKey: string
+  characterId: string | null
   /**
    * Rarity, recovered from the three rarity-filtered reads.
    *
@@ -70,6 +107,14 @@ export interface ItemRow {
    * `unknown` and are drawn neutral rather than guessed.
    */
   rarity: ItemRarity
+  /** Gear tier 0..5; 0 means the item predates the tier system. */
+  gearTier: number
+  /** Forged at the Relic: DIM marks these with a red corner badge. */
+  crafted: boolean
+  /** Season watermark image (the icon's top-left corner). */
+  watermark: string
+  /** Champion this weapon counters: 0 none, 1 barrier, 2 overload, 3 unstoppable. */
+  breakerType: number
 }
 
 /** One cached read of the whole account inventory. */
@@ -81,6 +126,13 @@ export interface InventorySnapshot {
   items: ItemRow[]
   /** Set when a page read was cut short; the view shows this instead of pretending. */
   truncated: boolean
+  /**
+   * The game's own badge artwork (crafted chip, tier markers).
+   *
+   * Handed down with the inventory so tiles never invent a shape the game
+   * already ships.
+   */
+  overlays?: { crafted: string; craftedBackground: string; tiers: string[] }
 }
 
 /** One selectable perk in a socket column. */
@@ -117,7 +169,7 @@ export interface ItemDetailView {
   kind: 'weapon' | 'armor' | 'other'
   icon: string
   power: number | null
-  equipped: boolean
+  equipped: EquippedState
   locked: boolean
   quantity: number
   location: string
@@ -129,6 +181,28 @@ export interface ItemDetailView {
   frame: string
   description: string
   columns: PerkColumnView[]
+  /**
+   * Stat lines in the game's own display order.
+   *
+   * A `number` display means the value has no meaningful bar (RPM, magazine,
+   * recoil direction) — same rule DIM applies.
+   */
+  stats: { hash: number; name: string; value: number; display: 'bar' | 'number' | 'recoil' }[]
+  /** Gear tier (T1..T5), null when the instance reports none. */
+  gearTier: number | null
+  /** Weapon/armor level. */
+  itemLevel: number | null
+  /** Forged at the Relic. */
+  crafted: boolean
+  /**
+   * Kills the installed tracker has recorded, when one is socketed.
+   *
+   * `null` when the weapon carries no tracker; a weapon with a tracker that has
+   * never killed anything reports 0, which is different.
+   */
+  killCount: number | null
+  /** Masterworked or enhanced. */
+  enhanced: boolean
   /** One line describing the current roll, as the tool words it. */
   rollSummary: string
 }

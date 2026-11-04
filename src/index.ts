@@ -7,9 +7,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
 import { runAction } from './mcp/actions'
-import { getInventory, clearInventoryCache } from './mcp/inventory'
-import { clearItemCaches, readItemDetail } from './mcp/item'
-import { runInventoryQuery } from './mcp/queries'
+import { readItemDetail } from './host/item-detail'
+import { AuthUnavailableError } from './bungie/types'
+import { BungieService } from './host/bungie-service'
 import type { ActionRequest, BridgeResponse } from './mcp/types'
 
 export const name = 'dsh-destiny-inventory'
@@ -50,6 +50,10 @@ async function readJsonBody(req: IncomingMessage, limitBytes = 64 * 1024): Promi
 
 /** Translate a thrown bridge fault into a stable wire code. */
 function toFailure(error: unknown): { code: string; message: string } {
+  if (error instanceof AuthUnavailableError) {
+    // Never paper over this: the browser half shows the reason verbatim.
+    return { code: 'AUTH_UNAVAILABLE', message: `认证不可用（${error.reason}）：${error.message}` }
+  }
   if (error instanceof Error) {
     const code =
       'code' in error && typeof error.code === 'string' ? error.code : error.name || 'BridgeError'
@@ -66,6 +70,13 @@ function toFailure(error: unknown): { code: string; message: string } {
  * this route yet: they need the MCP confirmation envelope and land in P3.
  */
 export function apply(ctx: Context, config: ConfigShape): void {
+  // Host data plane: its own Bungie client, definitions from the manifest.
+  // The MCP stays the only token writer/refresher during the transition.
+  const service = new BungieService({
+    tokenPath: config.tokenPath,
+    manifestPath: config.manifestPath,
+    apiKeyFile: config.apiKeyFile,
+  })
   ctx.webServer.register({
     kind: 'prefix',
     path: config.routePath,
@@ -97,9 +108,8 @@ export function apply(ctx: Context, config: ConfigShape): void {
             body.itemName ?? '',
           )
           if (receipt.applied) {
-            // A write moves the account on; both caches now describe the past.
-            clearInventoryCache()
-            clearItemCaches()
+            // A write moves the account on; the snapshot cache now describes the past.
+            service.invalidate()
           }
           sendJson(res, 200, { ok: true, data: receipt } satisfies BridgeResponse<unknown>)
         } catch (error) {
@@ -114,7 +124,12 @@ export function apply(ctx: Context, config: ConfigShape): void {
       }
       try {
         if (query === '/characters') {
-          const data = await runInventoryQuery(ctx, config.mcpServer, 'characters')
+          const data = await service.characters()
+          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
+          return
+        }
+        if (query === '/status') {
+          const data = await service.status()
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }
@@ -127,17 +142,25 @@ export function apply(ctx: Context, config: ConfigShape): void {
             })
             return
           }
-          const data = await readItemDetail(ctx, config.mcpServer, id, {
+          const data = await readItemDetail(service, id, {
             force: url.searchParams.get('refresh') === '1',
           })
+          if (data === null) {
+            sendJson(res, 404, {
+              ok: false,
+              error: { code: 'ItemNotFound', message: '这件物品不在当前快照里，先刷新库存' },
+            })
+            return
+          }
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }
         if (query === '/inventory') {
-          const data = await getInventory(ctx, config.mcpServer, {
-            force: url.searchParams.get('refresh') === '1',
-          })
-          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
+          const data = await service.inventory({ force: url.searchParams.get('refresh') === '1' })
+          sendJson(res, 200, {
+            ok: true,
+            data: { ...data, overlays: service.overlays() },
+          } satisfies BridgeResponse<unknown>)
           return
         }
         sendJson(res, 404, {
@@ -145,7 +168,11 @@ export function apply(ctx: Context, config: ConfigShape): void {
           error: { code: 'NotFound', message: `no bridge route for ${query}` },
         })
       } catch (error) {
-        sendJson(res, 502, { ok: false, error: toFailure(error) } satisfies BridgeResponse<never>)
+        const failure = toFailure(error)
+        sendJson(res, failure.code === 'AUTH_UNAVAILABLE' ? 401 : 502, {
+          ok: false,
+          error: failure,
+        } satisfies BridgeResponse<never>)
       }
     },
   })

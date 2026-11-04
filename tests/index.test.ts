@@ -6,7 +6,6 @@ import {
   callDestinyTool,
   destinyToolName,
 } from '../src/mcp/client'
-import { DestinyPayloadError, readPlayerProfile, runInventoryQuery } from '../src/mcp/queries'
 
 /** Minimal registry stand-in: only get() and execute() are reachable from the call layer. */
 function fakeContext(options: {
@@ -99,63 +98,4 @@ describe('callDestinyTool', () => {
   })
 })
 
-describe('readPlayerProfile', () => {
-  it('unwraps the MCP text block into the plugin wire shape', async () => {
-    const { ctx, execute } = fakeContext({ result: profileEnvelope([HUNTER]) })
-    const profile = await readPlayerProfile(ctx, 'destiny')
-    expect(execute).toHaveBeenCalledTimes(1)
-    expect(profile.displayName).toBe('OneTop丶Husky#6641')
-    expect(profile.triumphScore).toBe(23650)
-    expect(profile.characters).toEqual([
-      {
-        characterId: '2305843009679355779',
-        classType: 1,
-        className: '猎人',
-        light: 547,
-        emblemPath: '/common/hunter.jpg',
-        lastPlayed: '2026-10-06T14:43:35Z',
-      },
-    ])
-  })
 
-  it('keeps the JSON envelope off the wire', async () => {
-    const { ctx } = fakeContext({ result: profileEnvelope([HUNTER]) })
-    const profile = await readPlayerProfile(ctx, 'destiny')
-    expect(JSON.stringify(profile)).not.toContain('next_actions')
-  })
-
-  it('fails instead of reporting an empty account when the envelope is broken', async () => {
-    const { ctx } = fakeContext({ result: { content: [{ type: 'text', text: 'not json' }] } })
-    await expect(readPlayerProfile(ctx, 'destiny')).rejects.toBeInstanceOf(DestinyPayloadError)
-  })
-
-  it('fails when a character entry lost its light level', async () => {
-    const { ctx } = fakeContext({
-      result: profileEnvelope([{ ...HUNTER, light: undefined }]),
-    })
-    await expect(readPlayerProfile(ctx, 'destiny')).rejects.toThrow('missing id/class_type/light')
-  })
-
-  it('reports the upstream refusal when the envelope says ok=false', async () => {
-    const body = { ok: false, error: { message: '未授权' } }
-    const { ctx } = fakeContext({
-      result: { content: [{ type: 'text', text: JSON.stringify(body) }] },
-    })
-    await expect(readPlayerProfile(ctx, 'destiny')).rejects.toThrow('未授权')
-  })
-})
-
-describe('runInventoryQuery', () => {
-  it('routes the characters read to the profile parser', async () => {
-    const { ctx } = fakeContext({ result: profileEnvelope([HUNTER]) })
-    const data = (await runInventoryQuery(ctx, 'destiny', 'characters')) as { characters: unknown[] }
-    expect(data.characters).toHaveLength(1)
-  })
-
-  it('refuses an unknown read instead of answering with the nearest match', async () => {
-    const { ctx } = fakeContext({})
-    await expect(runInventoryQuery(ctx, 'destiny', 'nope')).rejects.toThrow(
-      'unknown inventory read',
-    )
-  })
-})

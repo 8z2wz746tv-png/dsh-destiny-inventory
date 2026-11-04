@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { callDestinyTool } from './client'
-import { parseToolEnvelope } from './queries'
+import { DestinyPayloadError, parseToolEnvelope } from './envelope'
 import type { ActionReceipt, ActionRequest } from './types'
 
 /**

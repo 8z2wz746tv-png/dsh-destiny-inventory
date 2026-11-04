@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import Schema from '@deepseek-ai/schemastery'
 
 // Tunable configuration must be a Schemastery Schema, never a plain object:
@@ -8,6 +10,16 @@ export interface Config {
   mcpServer: string
   /** Absolute pathname of the bridge route the browser half reads. */
   routePath: string
+  /**
+   * MCP token file the host half reads. Transitional: the MCP stays the only
+   * writer and the only refresher; this side re-reads it per request and never
+   * refreshes.
+   */
+  tokenPath: string
+  /** Manifest sqlite holding item/bucket/plug definitions. */
+  manifestPath: string
+  /** File that defines `BUNGIE_API_KEY` (MCP's .env until the broker exists). */
+  apiKeyFile: string
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -17,4 +29,13 @@ export const Config: Schema<Config> = Schema.object({
   routePath: Schema.string()
     .default('/dsh-destiny-inventory')
     .description('Absolute pathname of the plugin HTTP bridge, no trailing slash.'),
+  tokenPath: Schema.string()
+    .default(join(homedir(), '.destiny_mcp', 'tokens.json'))
+    .description('MCP token file (read-only; this side never refreshes it).'),
+  manifestPath: Schema.string()
+    .default(join(homedir(), '项目', 'destiny2-mcp', 'manifest', 'destiny_manifest_zh.sqlite3'))
+    .description('Manifest sqlite used for item/bucket/plug definitions.'),
+  apiKeyFile: Schema.string()
+    .default(join(homedir(), '项目', 'destiny2-mcp', '.env'))
+    .description('File that defines BUNGIE_API_KEY (transitional, until the OAuth broker).'),
 })
