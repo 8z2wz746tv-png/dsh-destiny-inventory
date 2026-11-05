@@ -68,6 +68,8 @@ const EMPTY_VIEW: ViewContext = {
 export class ContextStore {
   private view: ViewContext = EMPTY_VIEW
   private readonly entries: JournalEntry[] = []
+  /** instanceId → location key, from the last read; the baseline for spotting changes. */
+  private lastLocations = new Map<string, string>()
   private readonly journalPath: string
 
   /**
@@ -86,6 +88,18 @@ export class ContextStore {
   /** The current view. */
   readView(): ViewContext {
     return this.view
+  }
+
+  /** Where everything was on the previous read. */
+  locations(): Map<string, string> {
+    return this.lastLocations
+  }
+
+  /** Remember this read's locations as the next baseline. */
+  setLocations(rows: { instanceId: string; locationKey: string }[]): void {
+    this.lastLocations = new Map(
+      rows.filter((row) => row.instanceId !== '' && row.instanceId !== '0').map((row) => [row.instanceId, row.locationKey]),
+    )
   }
 
   /** Record one write and echo it to disk. */

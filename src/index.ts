@@ -13,6 +13,7 @@ import { ContextStore } from './host/context-store'
 import type { ViewContext } from './host/context-store'
 import { registerAgentTools } from './host/agent-tools'
 import { readJsonBody, sendJson, toFailure } from './host/http'
+import { detectExternal } from './host/detect-external'
 import { record } from './host/journal-record'
 import type { ActionRequest, BridgeResponse } from './host/types'
 
@@ -161,6 +162,9 @@ export function apply(ctx: Context, config: ConfigShape): void {
         }
         if (query === '/inventory') {
           const data = await service.inventory({ force: url.searchParams.get('refresh') === '1' })
+          // Note anything that moved without a matching journal entry. The agent
+          // can change the account through the MCP; this is how the panel finds out.
+          detectExternal(context, data.items)
           sendJson(res, 200, {
             ok: true,
             data: { ...data, overlays: service.overlays() },
