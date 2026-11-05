@@ -8,6 +8,7 @@
 | 文档 | 讲什么 | 什么时候看 |
 |---|---|---|
 | [`CODING-STANDARDS.md`](CODING-STANDARDS.md) | 跨项目可移植的编码规范骨架 | 写代码前 |
+| [`HANDOFF.md`](HANDOFF.md) | **换会话先读这份**：现状、决定、真机坑、待办 | 接手时 |
 | [`STATUS.md`](STATUS.md) | 对照四个阶段，哪完成、哪缺、为什么 | 决定下一步之前 |
 | [`PLAN-AGENT-CONTEXT.md`](PLAN-AGENT-CONTEXT.md) | P3：界面操作怎么进 agent 上下文 | 要动 agent 层时 |
 | [`PLAN-SEARCH.md`](PLAN-SEARCH.md) | 搜索怎么做：中文名 + perk 名，不引语法 | 要动搜索时 |
