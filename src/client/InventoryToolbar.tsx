@@ -4,6 +4,9 @@
  * Split out of InventoryPanel so the panel keeps to layout and data flow; the
  * bar owns nothing but its own markup and hands changes back through `onPatch`.
  */
+/** Filled in by the bundler from package.json (tsdown `define`). */
+declare const __PLUGIN_VERSION__: string
+
 import type { ReactElement } from 'react'
 import type { CategoryFilter, InventoryFilters, SortKey } from './filter'
 
@@ -100,7 +103,7 @@ export function InventoryToolbar({
       </button>
       <span className="dsh-destiny-toolbar__count">{countLabel}</span>
       <span className="dsh-destiny-build" title="当前加载的插件版本">
-        v0.47.1
+        v{__PLUGIN_VERSION__}
       </span>
     </div>
   )

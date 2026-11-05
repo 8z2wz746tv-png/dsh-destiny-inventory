@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'tsdown'
+
+/** The one place a version number is written: package.json. */
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 // Browser half builds to plain CJS first; scripts/wrap-client.mjs then wraps it
 // in the host's module-table call (`window.__ModuleLoader__.load`). Keeping the
@@ -35,5 +39,8 @@ export default defineConfig({
   // blank without a console error. Fold the guard at build time.
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
+    // The toolbar stamps the loaded build; a hand-typed string drifts the moment
+    // the package version moves, so fold it in at build time instead.
+    __PLUGIN_VERSION__: JSON.stringify(pkg.version),
   },
 })
