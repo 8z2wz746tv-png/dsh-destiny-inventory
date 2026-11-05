@@ -83,7 +83,7 @@
 | `item-write.ts` (124) | 一次写入的编排：找物品、解析角色 id、执行、失效缓存 |
 | `item-state-route.ts` (35) | 单件状态的解析（位置键 + equipped） |
 | `context-store.ts` (131) | **P3**：`ViewContext` + 200 条 journal + jsonl 落盘 |
-| `agent-tools.ts` (69) | **P3**：两个只读工具的注册 |
+| `agent-tools.ts` (51) | **P3**：两个只读工具的注册 |
 | `journal-record.ts` (37) | 写入 → 一条 journal 记录（含 `from`/`to` 映射） |
 | `detect-external.ts` | **P3**：发现不是自己做的变更 |
 | `http.ts` (49) | `sendJson` / `readJsonBody` / `toFailure` |
@@ -110,8 +110,8 @@
 | `use-hover-card.ts` (41) | 卡片状态（点开 / 点外关） |
 | `use-receipts.ts` | 回执栈（5 秒自动消失、可取消） |
 | `Receipts.tsx` (41) | 回执渲染 |
-| `use-view-report.ts` (44) | **P3**：上报视图（节流 200ms、不变不发） |
-| `view-reporter.ts` (20) | 视图组装 |
+| `use-view-report.ts` (53) | **P3**：上报视图（节流 200ms、不变不发） |
+| `view-reporter.ts` (44) | 视图组装 |
 | `styles.ts` (494) | 面板样式（CSS 模板字符串） |
 | `styles-detail.ts` (429) | 详情卡样式 |
 | `styles-store.ts` / `styles-intrinsic.ts` | 角色卡 / 固有效果样式 |
