@@ -90,3 +90,19 @@ export function parseDamageTypes(
   }
   return out
 }
+
+/**
+ * Read an item's category hashes.
+ *
+ * They arrive unsigned; the project compares signed values, so convert here the
+ * same way the rest of the manifest readers do.
+ * @param row - the parsed item definition.
+ * @returns signed category hashes, most specific last.
+ */
+export function readCategoryHashes(row: Record<string, unknown>): number[] {
+  const raw = row.itemCategoryHashes
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((value): value is number => typeof value === 'number')
+    .map((value) => (value > 2 ** 31 ? value - 2 ** 32 : value))
+}

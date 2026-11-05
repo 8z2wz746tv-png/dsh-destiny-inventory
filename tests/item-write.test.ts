@@ -8,7 +8,13 @@ import type { ProfileSnapshot } from '../src/bungie/profile'
  * bridge's request shape and the snapshot lookups each action needs.
  */
 const snapshot = (items: { instanceId: string; itemHash: number; characterId: string | null }[]) =>
-  ({ items } as unknown as ProfileSnapshot)
+  ({
+    items,
+    characters: [
+      { characterId: 'char-hunter', classType: 1, lastPlayed: '2026-11-01T00:00:00Z' },
+      { characterId: 'char-warlock', classType: 2, lastPlayed: '2026-10-01T00:00:00Z' },
+    ],
+  }) as unknown as ProfileSnapshot
 
 function deps(stub: ReturnType<typeof vi.fn>, items = [{ instanceId: 'i1', itemHash: 555, characterId: 'hunter' }]) {
   return {
@@ -61,6 +67,15 @@ describe('runItemWrite', () => {
     await runItemWrite(d, { kind: 'lock', instanceId: 'i1', locked: false })
     const body = (post.mock.calls[0] as unknown as [string, { characterId: string }])[1]
     expect(body.characterId).toBe('hunter')
+  })
+
+  it('resolves a location key to the character id Bungie wants', async () => {
+    const post = vi.fn(async () => ({}))
+    const d = deps(post)
+    await runItemWrite(d, { kind: 'move', instanceId: 'i1', characterId: 'hunter' })
+    const body = (post.mock.calls[0] as unknown as [string, { characterId: string }])[1]
+    // `hunter` is not an id; sending it comes back as "unexpected problem decoding"
+    expect(body.characterId).toBe('char-hunter')
   })
 
   it('fails on an instance the snapshot does not know, instead of guessing', async () => {

@@ -12,7 +12,7 @@
  *    identity and write confirmations all key on it.
  */
 import { existsSync } from 'node:fs'
-import { hasCraftingSocket, parseDamageTypes, parseOverlays, readStatValues } from './manifest-shapes'
+import { hasCraftingSocket, parseDamageTypes, parseOverlays, readCategoryHashes, readStatValues } from './manifest-shapes'
 import { DatabaseSync } from 'node:sqlite'
 
 /** Why the definition database cannot answer right now. */
@@ -81,6 +81,7 @@ export interface ItemDefinition {
    * Definition-level: this item can be crafted (it owns a socket of DIM's
    * crafting category). `state` alone over-reports, so both are required.
    */
+  categoryHashes: number[]
   craftingSocket: boolean
 }
 
@@ -176,6 +177,7 @@ export function parseItem(hash: number, raw: Record<string, unknown>): ItemDefin
     stats: readStatValues(raw.stats),
     watermark: iconUrl(raw.iconWatermark),
     breakerType: typeof raw.breakerType === 'number' ? raw.breakerType : 0,
+    categoryHashes: readCategoryHashes(raw),
     craftingSocket: hasCraftingSocket(raw.sockets),
   }
 }
@@ -252,12 +254,8 @@ export class ManifestStore {
   }
 
   /**
-   * Localized damage-type name for a `defaultDamageType` enum value.
-   *
-   * Read from `DestinyDamageTypeDefinition` rather than hardcoded, so a manifest
-   * update renames it here and nowhere else.
-   * @param enumValue - `defaultDamageType` (1 kinetic, 2 arc, ...).
-   * @returns the localized name, or an empty string when unknown or unavailable.
+   * Localized damage-type name, read from `DestinyDamageTypeDefinition` rather
+   * than hardcoded so a manifest update renames it here and nowhere else.
    */
   damageType(enumValue: number | null): string {
     return this.damageTypeInfo(enumValue).name

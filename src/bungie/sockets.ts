@@ -29,6 +29,30 @@ export interface RawPlugObjectives {
   objectivesPerPlug?: Record<string, { objectiveHash?: number; progress?: number }[]>
 }
 
+/** Raw component-304 row: the instance's current stat values. */
+export interface RawStats {
+  stats?: Record<string, { statHash?: number; value?: number }>
+}
+
+/**
+ * Read an instance's current stats.
+ *
+ * These are the values the game shows: base stats plus whatever the installed
+ * perks and mods add. The definition's own `stats.stats` is the base only, and
+ * armor carries nothing there at all — its six stats exist only per instance.
+ * @param row - component 304's row for this instance.
+ * @returns values by signed stat hash.
+ */
+export function readStats(row: RawStats | undefined): Record<number, number> {
+  const out: Record<number, number> = {}
+  for (const entry of Object.values(row?.stats ?? {})) {
+    const hash = entry.statHash
+    if (typeof hash !== 'number' || typeof entry.value !== 'number') continue
+    out[hash > 2 ** 31 ? hash - 2 ** 32 : hash] = entry.value
+  }
+  return out
+}
+
 /** Raw component-310 row: socket index → the plugs it can hold. */
 export interface RawReusable {
   plugs?: Record<string, { plugItemHash?: number; canInsert?: boolean }[]>

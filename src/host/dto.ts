@@ -51,6 +51,8 @@ export interface ItemSource {
   gearTier?: number
   /** Forged at the Relic. */
   crafted?: boolean
+  /** Masterworked. */
+  masterwork?: boolean
 }
 
 /** Whether component 205 answered for this snapshot. */
@@ -67,6 +69,9 @@ export function toKind(itemType: number | null): ItemRow['kind'] {
 }
 
 /** Map `DestinyTierType` to the four rarities the grid styles. */
+/** Localized ammo names, matching what the detail view prints. */
+const AMMO_NAME: Record<number, string> = { 1: '主要弹药', 2: '特殊弹药', 3: '重型弹药' }
+
 export function toRarity(tierType: number | null): ItemRarity {
   if (tierType === TIER.exotic) return 'exotic'
   if (tierType === TIER.legendary) return 'legendary'
@@ -112,9 +117,14 @@ export function toItemRow(
     characterId: source.characterId,
     rarity: toRarity(item?.tierType ?? null),
     gearTier: source.gearTier ?? 0,
-    // Both must agree: the state bit alone tagged 933 of 1924 items.
-    crafted: source.crafted === true && item?.craftingSocket === true,
+    masterwork: source.masterwork === true,
+    crafted: source.crafted === true,
     watermark: item?.watermark ?? '',
+    classType: item?.classType ?? 3,
+    categoryHashes: item?.categoryHashes ?? [],
+    ammoType: definitions.damageType(item?.damageType ?? null) === '' ? '' : (AMMO_NAME[item?.ammoType ?? 0] ?? ''),
+    damageType: definitions.damageType(item?.damageType ?? null),
+    damageRank: item?.damageType ?? 99,
     breakerType: item?.breakerType ?? 0,
   }
 }

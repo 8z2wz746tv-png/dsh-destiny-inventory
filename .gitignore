@@ -3,3 +3,4 @@ lib/
 .client-build/
 *.tgz
 .DS_Store
+archive/packages/

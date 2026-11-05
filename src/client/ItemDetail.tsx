@@ -4,11 +4,14 @@
  * Deliberately not a panel or a modal: pointing at a tile is the interaction the
  * original had, and the card follows the pointer so the grid stays visible.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactElement } from 'react'
 import type { ItemDetailView } from '../host/types'
 import { AMMO_CODE, AMMO_ICON } from './ammo-icons'
+import { IntrinsicBlock } from './IntrinsicBlock'
+import { PerkColumns } from './PerkColumns'
+import type { HoverSummary } from './use-hover-card'
 import { RecoilGauge } from './RecoilGauge'
 import { peekItemDetail, readItemDetailCached } from './api'
 
@@ -48,15 +51,17 @@ function damageClass(damage: string): string {
  * @param anchor - the tile's viewport rectangle.
  * @returns fixed-position coordinates.
  */
-function place(anchor: DOMRect): { left: number; top: number } {
+function place(anchor: DOMRect, height: number): { left: number; top: number } {
   const width = 386
   const margin = 12
   const gap = 10
   const left = anchor.right + gap + width > window.innerWidth - margin
     ? Math.max(margin, anchor.left - width - gap)
     : anchor.right + gap
-  const top = Math.max(margin, Math.min(anchor.top, window.innerHeight - 360))
-  return { left, top }
+  // Clamp against the card's real height: a hardcoded guess left a tall card
+  // hanging past the bottom edge whenever the tile sat low in the viewport.
+  const room = Math.max(margin, window.innerHeight - height - margin)
+  return { left, top: Math.max(margin, Math.min(anchor.top, room)) }
 }
 
 /**
@@ -67,8 +72,7 @@ export function ItemDetailCard({
   routePath,
   itemId,
   anchor,
-  onEnter,
-  onLeave,
+  anchorSummary,
   onClose,
   onEquip,
   onToggleLock,
@@ -76,10 +80,8 @@ export function ItemDetailCard({
   routePath: string
   itemId: string
   anchor: DOMRect
-  /** Pointer entered the card: cancel any pending close. */
-  onEnter: () => void
-  /** Pointer left the card: let the panel decide whether to close. */
-  onLeave: () => void
+  /** The row the tile already knows: name, icon, type, rarity, power. */
+  anchorSummary?: HoverSummary
   onClose: () => void
   /** Equip this item; the panel owns the confirmation flow. */
   onEquip: (detail: ItemDetailView) => void
@@ -88,6 +90,9 @@ export function ItemDetailCard({
 }): ReactElement {
   // Start from the cache when it has this item: a hit must paint content on the
   // very first frame, not flash "reading…" while a promise resolves.
+  /** Head fields from the grid row, so the card never opens blank. */
+  const [summary] = useState(anchorSummary)
+
   const [state, setState] = useState<LoadState>(() => {
     const ready = peekItemDetail(routePath, itemId)
     return ready === null ? { kind: 'loading' } : { kind: 'ready', detail: ready }
@@ -113,27 +118,51 @@ export function ItemDetailCard({
     return () => controller.abort()
   }, [routePath, itemId])
 
-  // A pinned card has no pointer to leave it, so Escape is its only exit.
+  // A click anywhere outside the card dismisses it; Escape still works.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
     }
+    const onDown = (event: PointerEvent): void => {
+      const node = cardRef.current
+      if (node !== null && !node.contains(event.target as Node)) onClose()
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onDown, true)
+    }
   }, [onClose])
 
-  const position = place(anchor)
+  // Measure per render: the perk list changes the height, and placement needs it.
+  const cardRef = useRef<HTMLElement>(null)
+  const [cardHeight, setCardHeight] = useState(0)
+  useLayoutEffect(() => {
+    const measured = cardRef.current?.offsetHeight ?? 0
+    if (measured > 0 && measured !== cardHeight) setCardHeight(measured)
+  })
+  const position = place(anchor, cardHeight)
   const ammoCode = state.kind === 'ready' ? (AMMO_CODE[state.detail.ammoType] ?? 0) : 0
 
   const card = (
     <aside
+      ref={cardRef}
       className={`inventory-hover-card ${tierClass(state.kind === 'ready' ? state.detail.rarity : '')}`}
       style={{ left: position.left, top: position.top }}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
       aria-label="物品详情"
     >
-      {state.kind === 'loading' && <p className="inventory-hover-empty">正在读取物品…</p>}
+      {state.kind !== 'ready' && summary !== undefined && (
+        <header className="inventory-hover-header">
+          <span>{tierLabel(summary.rarity)}</span>
+          <h2>{summary.name}</h2>
+          <div>
+            <strong>{summary.type}</strong>
+            {summary.power !== null && <b>{summary.power}</b>}
+          </div>
+        </header>
+      )}
+      {state.kind === 'loading' && <p className="inventory-hover-empty">正在读取特性…</p>}
       {state.kind === 'error' && <p className="inventory-hover-empty">{state.message}</p>}
       {state.kind === 'ready' && (
         <>
@@ -203,9 +232,14 @@ export function ItemDetailCard({
               <p className="inventory-hover-description">{state.detail.description}</p>
             )}
 
+              <IntrinsicBlock intrinsic={state.detail.intrinsic} />
+
             {state.detail.stats.length > 0 && (
-              <section className="inventory-hover-stats" aria-label="武器属性">
-                <h3>武器属性</h3>
+              <section
+                className="inventory-hover-stats"
+                aria-label={state.detail.kind === 'armor' ? '护甲属性' : '武器属性'}
+              >
+                <h3>{state.detail.kind === 'armor' ? '护甲属性' : '武器属性'}</h3>
                 {state.detail.stats.map((stat) => (
                   <div key={stat.hash}>
                     <span>{stat.name}</span>
@@ -228,37 +262,8 @@ export function ItemDetailCard({
 
             {state.detail.columns.length > 0 && (
               <section className="inventory-hover-sockets">
-                <h3>武器特性</h3>
-                {/*
-                  One column per socket, its whole pool stacked inside: the
-                  installed plug is bright, the alternatives dim. This is the
-                  shape the webui renders and the reason a single flat grid read
-                  as "missing perks".
-                */}
-                <div className="inventory-hover-socket-columns">
-                  {state.detail.columns.map((column) => (
-                    <div className="inventory-hover-socket-column" key={column.socketIndex}>
-                      <p className="inventory-hover-socket-column__label">{column.slot}</p>
-                      {column.options.map((option) => (
-                        <div
-                          className={`inventory-hover-perk${option.selected ? ' is-selected' : ''}`}
-                          key={`${column.socketIndex}:${option.hash}`}
-                          title={option.description === '' ? option.name : `${option.name}\n${option.description}`}
-                        >
-                          <div className="inventory-hover-perk-icon">
-                            {option.icon !== '' && <img src={option.icon} alt="" loading="lazy" />}
-                          </div>
-                          <strong>{option.name}</strong>
-                          {option.enhancedHash === option.hash && option.hash !== 0 && (
-                            <span className="inventory-hover-perk__enhanced" title="强化特性" aria-label="强化特性">
-                              ▲
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                <h3>{state.detail.kind === 'armor' ? '护甲模组' : '武器特性'}</h3>
+                <PerkColumns columns={state.detail.columns} />
               </section>
             )}
 

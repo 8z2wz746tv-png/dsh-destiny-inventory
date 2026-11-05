@@ -14,6 +14,7 @@
 
 import { BUILD_STAMP_CSS, DETAIL_ACTIONS_CSS, DETAIL_LAYOUT_CSS, DETAIL_VARS, HOVER_CARD_CSS, ENHANCED_ARROW_CSS, GLYPH_CSS, HOVER_SIZE_CSS, KILL_TRACKER_CSS, PERK_COLUMNS_CSS, RECOIL_CSS, TILE_BADGES_CSS } from './styles-detail'
 
+import { INTRINSIC_CSS } from './styles-intrinsic'
 import { STORE_CARD_CSS } from './styles-store'
 
 const CSS = `
@@ -105,6 +106,32 @@ const CSS = `
 .dsh-destiny-section__count { font-size: 11px; font-weight: 400; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
 
 
+/* A grouped block inside the vault cell: head glyph, then its tiles inline.
+   Only the vault cell is segmented; character cells stay a flat 3x3. */
+.dsh-destiny-segment {
+  /* A block is its own flex run so the glyph leads its tiles; blocks flow inline
+     with each other inside the cell's wrapping row. */
+  display: inline-flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dsh-destiny-segment__glyph {
+  /* One tile wide, like DIM: a glyph the size of the items beside it lines up on
+     the same baseline instead of drifting against a taller tile. */
+  flex: 0 0 auto;
+  inline-size: var(--dsh-item-size);
+  block-size: var(--dsh-item-size);
+  display: grid;
+  place-items: center;
+  opacity: .5;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-destiny-segment__glyph svg {
+  inline-size: 62%;
+  block-size: 62%;
+  fill: currentColor;
+}
 .dsh-destiny-row {
   /* Flex, not grid: a character column must shrink to what it holds (an empty
      character costs one tile, not a whole column) while the vault takes the
@@ -225,19 +252,32 @@ const CSS = `
 }
 .dsh-destiny-tile:hover { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: -2px; }
 .dsh-destiny-tile:active { cursor: grabbing; }
+/* The engram shelf: five slots across, two rows, 52px a slot.
+   Every length is fixed on purpose — flex-basis alone let the grid's content
+   push the cell back out, so the tiles came out at twice their size. */
+.dsh-destiny-cell[data-shelf='engrams'] {
+  flex: 0 0 268px;
+  inline-size: 268px;
+  min-inline-size: 0;
+  max-inline-size: 268px;
+}
+.dsh-destiny-cell__rest.is-engram-shelf {
+  display: grid;
+  grid-template-columns: repeat(5, 52px);
+  grid-auto-rows: 52px;
+  gap: 2px;
+  align-content: start;
+  inline-size: 268px;
+}
 .dsh-destiny-tile.is-compact {
-  /* Ten to a row, filling the column exactly: DIM sets --item-size to one tenth
-     of the column here, so nothing wraps. */
-  flex: 0 0 auto;
-  inline-size: calc((var(--dsh-item-size) * 4 + 20px - 9px) / 10);
-  block-size: calc((var(--dsh-item-size) * 4 + 20px - 9px) / 10);
+  /* The shelf grid places these; the size is fixed so five fit exactly. */
+  inline-size: 52px;
+  block-size: 52px;
   border-radius: 5px;
 }
-.dsh-destiny-cell__rest:has(.dsh-destiny-tile.is-compact) {
-  /* Tight ten-in-a-row: with a gap the shelf reads as the same pitch as the
-     column gutter, and the four columns stop being distinguishable. */
-  gap: 0;
-  flex-wrap: nowrap;
+.dsh-destiny-cell[data-shelf='engrams'] .dsh-destiny-engram-empty {
+  inline-size: 52px;
+  block-size: 52px;
 }
 .dsh-destiny-cell:has(.dsh-destiny-tile.is-compact),
 .dsh-destiny-cell[data-shelf] {
@@ -262,7 +302,6 @@ const CSS = `
 }
 .dsh-destiny-engram-empty {
   box-sizing: border-box;
-  flex: 0 0 auto;
   inline-size: calc((var(--dsh-item-size) * 4 + 20px - 9px) / 10);
   block-size: calc((var(--dsh-item-size) * 4 + 20px - 9px) / 10);
   background: var(--dsw-alias-bg-layer-2);
@@ -285,6 +324,13 @@ const CSS = `
 }
 .dsh-destiny-tile.r-exotic { border-color: var(--dsh-rarity-exotic-border); background: var(--dsh-rarity-exotic-wash); }
 .dsh-destiny-tile.r-legendary { border-color: var(--dsh-rarity-legendary-border); background: var(--dsh-rarity-legendary-wash); }
+
+/* After the rarity rules on purpose: same specificity, so a gold ring only wins
+   if it is declared later. */
+.dsh-destiny-tile.is-masterwork {
+  border-color: #e9d071;
+  box-shadow: inset 0 0 0 2px #e9d071, 0 0 6px rgba(233, 208, 113, .45);
+}
 .dsh-destiny-tile.r-rare { border-color: var(--dsh-rarity-rare-border); background: var(--dsh-rarity-rare-wash); }
 .dsh-destiny-tile__icon { inline-size: 100%; block-size: 100%; display: block; object-fit: cover; }
 .dsh-destiny-tile__power {
@@ -374,7 +420,7 @@ export function ensureStyles(): () => void {
   if (existing !== null) return () => undefined
   const element = document.createElement('style')
   element.id = STYLE_ID
-  element.textContent = DETAIL_VARS + CSS + RECEIPT_CSS + STORE_CARD_CSS + DETAIL_LAYOUT_CSS + HOVER_CARD_CSS + BUILD_STAMP_CSS + TILE_BADGES_CSS + PERK_COLUMNS_CSS + HOVER_SIZE_CSS + RECOIL_CSS + KILL_TRACKER_CSS + ENHANCED_ARROW_CSS + GLYPH_CSS + DETAIL_ACTIONS_CSS + LEGACY_THEME
+  element.textContent = DETAIL_VARS + CSS + RECEIPT_CSS + STORE_CARD_CSS + DETAIL_LAYOUT_CSS + HOVER_CARD_CSS + BUILD_STAMP_CSS + TILE_BADGES_CSS + PERK_COLUMNS_CSS + HOVER_SIZE_CSS + RECOIL_CSS + KILL_TRACKER_CSS + ENHANCED_ARROW_CSS + GLYPH_CSS + DETAIL_ACTIONS_CSS + INTRINSIC_CSS + LEGACY_THEME
   document.head.appendChild(element)
   return () => element.remove()
 }
@@ -392,6 +438,13 @@ export const RECEIPT_CSS = `
   max-inline-size: 320px;
   pointer-events: none;
 }
+.dsh-destiny-receipt__icon {
+  inline-size: 26px;
+  block-size: 26px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  object-fit: cover;
+}
 .dsh-destiny-receipt {
   display: flex;
   flex-direction: column;
@@ -406,6 +459,11 @@ export const RECEIPT_CSS = `
   box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
 }
 .dsh-destiny-receipt.is-error { border-inline-start-color: #d9534f; }
+.dsh-destiny-receipt { cursor: pointer; }
+.dsh-destiny-receipt.is-pending .dsh-destiny-receipt__detail::after {
+  content: " · 点此取消";
+  color: var(--dsw-alias-label-tertiary);
+}
 .dsh-destiny-receipt__text { color: var(--dsw-alias-label-primary); }
 .dsh-destiny-receipt__detail { color: var(--dsw-alias-label-tertiary); font-size: 10px; }
 /* In flight: a moving stripe reads as progress without inventing a percentage. */

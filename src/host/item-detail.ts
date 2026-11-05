@@ -7,7 +7,7 @@
  */
 import type { BungieService } from './bungie-service'
 import { BASE_TO_ENHANCED, ENHANCED_PERK_HASHES } from './enhanced-perks'
-import { NO_BAR, RECOIL_DIRECTION, statSortOrder } from './stat-order'
+import { statLines } from './stat-lines'
 import { toRarity } from './dto'
 import type { DefinitionLookup } from './dto'
 import type { ProfileItem } from '../bungie/profile'
@@ -140,23 +140,6 @@ function columnsOf(item: ProfileItem, plug: DefinitionLookup['plug']): PerkColum
  * @param definition - the item's Manifest definition.
  * @param definitions - lookup for names and ordering.
  */
-function statLines(
-  definition: { statGroupHash: number | null; stats: Record<number, { value: number; displayMaximum: number }> } | null,
-  definitions: DefinitionLookup,
-): { hash: number; name: string; value: number; display: 'bar' | 'number' | 'recoil' }[] {
-  if (definition === null) return []
-  return definitions
-    .statOrder(definition.statGroupHash)
-    .flatMap((hash) => {
-      const entry = definition.stats[hash]
-      if (entry === undefined || entry.value === 0) return []
-      const name = definitions.statName(hash)
-      if (name === '') return []
-      const display = hash === RECOIL_DIRECTION ? ('recoil' as const) : NO_BAR.has(hash) ? ('number' as const) : ('bar' as const)
-      return [{ hash, name, value: entry.value, display }]
-    })
-    .sort((left, right) => statSortOrder(left.hash) - statSortOrder(right.hash))
-}
 
 /**
  * Build the detail card for one instance.
@@ -173,11 +156,27 @@ export async function readItemDetail(
   const { snapshot, definitions } = await service.detailSource(options)
   const item = snapshot.items.find((candidate) => candidate.instanceId === instanceId)
   if (item === undefined) return null
+  return buildItemDetail(item, definitions, snapshot.equippedCharacters)
+}
 
+/**
+ * Assemble one detail from a row that is already parsed.
+ *
+ * Split from the lookup so a bulk build walks the snapshot once instead of
+ * re-resolving it per item.
+ * @param item - the parsed instance.
+ * @param definitions - manifest lookups.
+ * @returns the detail view.
+ */
+export function buildItemDetail(
+  item: ProfileItem,
+  definitions: DefinitionLookup,
+  equippedCharacters: Set<string> = new Set(),
+): ItemDetailView {
   const definition = definitions.item(item.itemHash)
   const columns = columnsOf(item, definitions.plug)
   const ammo = definition?.ammoType ?? null
-  const equipped = pickEquipped(snapshot, item)
+  const equipped = pickEquipped(equippedCharacters, item)
 
   return {
     id: item.key,
@@ -199,12 +198,14 @@ export async function readItemDetail(
     frame: columns.find((column) => column.kind === 'frames')?.options[0]?.name ?? '',
     description: definition?.description ?? '',
     columns,
-    stats: statLines(definition, definitions),
+    stats: statLines(definition, definitions, definition?.itemType === 2, item.stats),
     gearTier: item.gearTier,
     itemLevel: item.itemLevel,
     crafted: item.crafted,
+    masterwork: item.masterwork,
     killCount: killCount(item),
     enhanced: item.enhanced,
+    intrinsic: intrinsicOf(item, definitions.plug, definition?.tierType ?? null),
     rollSummary:
       columns.length === 0
         ? '这件物品没有可切换的特性。'
@@ -231,10 +232,27 @@ function killCount(item: ProfileItem): number | null {
 
 /** Three-state equipped flag, per PLAN-P0's rule: no judgement without data. */
 function pickEquipped(
-  snapshot: { equippedCharacters: Set<string> },
+  equippedCharacters: Set<string>,
   item: ProfileItem,
 ): 'equipped' | 'not_equipped' | 'unknown' {
   if (item.source === 'equipment') return 'equipped'
-  if (item.characterId !== null && !snapshot.equippedCharacters.has(item.characterId)) return 'unknown'
+  if (item.characterId !== null && !equippedCharacters.has(item.characterId)) return 'unknown'
   return 'not_equipped'
+}
+
+/** The exotic intrinsic, when the item has one. */
+function intrinsicOf(
+  item: ProfileItem,
+  plug: DefinitionLookup['plug'],
+  tierType: number | null,
+): { name: string; description: string; icon: string } | null {
+  // Only exotics carry a distinct intrinsic; on a legendary the same socket holds
+  // the frame, which already shows as its own perk column.
+  if (tierType !== 6) return null
+  for (const socket of item.sockets) {
+    const definition = plug(socket.plugHash)
+    if (definition === null || !definition.plugCategoryIdentifier.startsWith('intrinsics')) continue
+    return { name: definition.name, description: definition.description, icon: definition.icon }
+  }
+  return null
 }

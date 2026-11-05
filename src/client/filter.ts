@@ -1,3 +1,5 @@
+import { buildCells, makeCell } from './cells'
+import type { CellSegment } from './segments'
 import type { ItemRow } from '../host/types'
 import { ALWAYS_SHOWN, BUCKET_SECTIONS, bucketRank, sectionOfBucket } from './buckets'
 
@@ -82,6 +84,11 @@ export interface StoreCell {
   equipped: ItemRow | null
   /** Everything else in this bucket. */
   items: ItemRow[]
+  /**
+   * Blocks inside this cell, for the vault column: DIM groups that column alone,
+   * so a character's grid is never split.
+   */
+  segments: CellSegment[]
 }
 
 /** One row: a single bucket (or item type) across every store. */
@@ -260,7 +267,11 @@ export function buildSections(
       )
       .map(([, { label, items: rowItems }]) => {
         const sorted = [...rowItems].sort((a, b) => compareItems(a, b, filters.sort))
-        return { label, itemCount: sorted.length, cells: buildCells(sorted, layout, activeCharacter) }
+        return {
+          label,
+          itemCount: sorted.length,
+          cells: buildCells(sorted, layout, activeCharacter, meta.id),
+        }
       })
     sections.push({
       id: meta.id,
@@ -283,32 +294,7 @@ export function buildSections(
  * @param layout - current width class.
  * @param activeCharacter - which character column medium mode shows.
  */
-function makeCell(location: string, label: string, flex: boolean, items: ItemRow[]): StoreCell {
-  const equipped = items.find((item) => item.equipped === 'equipped') ?? null
-  return {
-    location,
-    label,
-    flex,
-    equipped,
-    items: equipped === null ? items : items.filter((item) => item !== equipped),
-  }
-}
 
-export function buildCells(sorted: ItemRow[], layout: LayoutMode, activeCharacter: string): StoreCell[] {
-  if (layout === 'narrow') {
-    return [makeCell('all', '全部', true, sorted)]
-  }
-  if (layout === 'medium') {
-    const active = STORE_COLUMNS.find((column) => column.location === activeCharacter) ?? STORE_COLUMNS[0]
-    return [
-      makeCell(active.location, active.label, false, sorted.filter((item) => item.locationKey === active.location)),
-      makeCell('vault', '仓库', true, sorted.filter((item) => item.locationKey === 'vault')),
-    ]
-  }
-  return STORE_COLUMNS.map((column) =>
-    makeCell(column.location, column.label, column.location === 'vault', sorted.filter((item) => item.locationKey === column.location)),
-  )
-}
 
 /**
  * Distinct item types present in the snapshot, for the type picker.

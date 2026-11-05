@@ -23,6 +23,7 @@ export const Component = {
   characterEquipment: 205,
   /** Per-instance state: light, gear tier, and `isEquipped`. */
   itemInstances: 300,
+  itemStats: 304,
   /** Per-instance sockets (what is plugged in). */
   itemSockets: 305,
   itemReusablePlugs: 310,
@@ -42,6 +43,9 @@ export const INVENTORY_COMPONENTS: number[] = [
   Component.characterInventories,
   Component.characterEquipment,
   Component.itemInstances,
+  // Current stat values live per instance: armor has no stats in its definition
+  // at all, and a weapon's definition carries base values without its perks.
+  Component.itemStats,
 ]
 
 /**

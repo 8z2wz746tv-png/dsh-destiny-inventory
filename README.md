@@ -1,44 +1,33 @@
 # dsh-destiny-inventory
 
-A DeepSeek Harness (DSH) plugin scaffolded by [`dsh-plugin-dev new`](https://github.com/PerryLink/dsh-plugin-guide).
+DeepSeek Harness 的《命运 2》仓库插件：装备栏、仓库、悬停详情卡、拖拽移动。
 
-## Compatibility
+## 装
 
-| Surface | Status |
-|---|---|
-| Harness | DeepSeek Harness `0.2.1-alpha.2` (npm `alpha`); `latest`/`next` = `0.2.0-rc.2` |
-| Node | `^22.19.0 || >=24.0.0` |
-| Platforms | All (plain ESM; no native code, no network) |
-
-## What it does
-
-Registers the `destiny-inventory_echo` tool. Calling it replies with `<greeting>: <text>`, where `<greeting>` comes from the plugin config and `<text>` is the argument.
-
-## Install
-
-```sh
-pnpm pack
-dsh plugin --profile <name> add ./dsh-destiny-inventory-0.1.0.tgz
-dsh --profile <name> --dump-config | grep 'dsh-destiny-inventory'
+```bash
+dsh plugin add /绝对路径/dsh-destiny-inventory-<版本>.tgz
 ```
 
-## Configuration
+装完**完全退出 DSH 再打开**（宿主侧代码不在热更范围里）。
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `greeting` | string | `Hello` | Prefix for the echo reply |
+## 它是什么
 
-Configuration is validated by the Schemastery `Config` schema in `src/config.ts`; no tunable is hardcoded.
+- **自己的数据面**：`src/bungie/` 直连 Bungie Platform API，`src/host/` 组装成线格式。
+- **自己的写入**：移动 / 装备 / 锁定 / 邮政官取回都直接 POST Bungie，不经 MCP。
+- **MCP 只服务随航 agent**：分析、配装、模组那些留给它。
 
-## Development
+边界写在 [`PLAN-SELF-HOSTED-DIM.md`](PLAN-SELF-HOSTED-DIM.md) §1，动代码前先看那份。
 
-```sh
-pnpm install
-pnpm run typecheck
-pnpm test
-pnpm run build
+## 开发
+
+```bash
+pnpm test          # 单测 + 架构守门
+pnpm typecheck
+./dev.sh           # 构建并同步到 DSH profile；客户端改动 500ms 热更
 ```
 
-## License
+`src/host/` 或 `src/bungie/` 改了必须重启 DSH。规矩见 [`AGENTS.md`](AGENTS.md)，文档索引在 [`docs/README.md`](docs/README.md)。
 
-[Apache License 2.0](LICENSE) © 2026 dsh-destiny-inventory contributors.
+## 许可
+
+MIT。DIM 的素材（图标、属性顺序、强化 perk 表）来自 [DIM](https://github.com/DestinyItemManager/DIM)，许可见 [`LICENSE-DIM.md`](LICENSE-DIM.md)；上游声明见 [`UPSTREAM.md`](UPSTREAM.md)。

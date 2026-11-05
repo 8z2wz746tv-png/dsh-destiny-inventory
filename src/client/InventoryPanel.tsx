@@ -10,10 +10,15 @@ import type {
   ItemRow,
   PlayerProfileView,
 } from '../host/types'
-import { fetchCharacters, fetchInventory, postAction, prefetchItemDetail } from './api'
+import { fetchCharacters, fetchInventory, postAction, warmDetails } from './api'
 import { ItemDetailCard } from './ItemDetail'
 import { DEFAULT_FILTERS, availableTypes, buildSections, emptyShelfSections } from './filter'
 import { InventoryToolbar } from './InventoryToolbar'
+import { applyLock, applyMove } from './apply-move'
+import { Receipts } from './Receipts'
+import { useReceipts } from './use-receipts'
+import { CellSegments } from './CellSegments'
+import { ENGRAM_CELL_STYLE, ENGRAM_SHELF_STYLE } from './segments'
 import { ItemTile } from './ItemTile'
 import type { InventoryFilters, LayoutMode, StoreCell } from './filter'
 
@@ -22,14 +27,6 @@ type LoadState =
   | { kind: 'ready'; snapshot: InventorySnapshot; profile: PlayerProfileView }
   | { kind: 'error'; message: string }
 
-interface ReceiptLine {
-  id: number
-  ok: boolean
-  text: string
-  detail: string
-  /** Still in flight: shown immediately so a long move does not look dropped. */
-  pending?: boolean
-}
 
 
 
@@ -102,12 +99,15 @@ function StoreCard({
   )
 }
 
+/** Where a move is going, in the words the receipt should use. */
+const DESTINATION_LABEL: Record<string, string> = { vault: '仓库', hunter: '猎人', warlock: '术士', titan: '泰坦' }
+
 export function InventoryPanel({ routePath }: { routePath: string }): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [filters, setFilters] = useState<InventoryFilters>(DEFAULT_FILTERS)
   const hoverCard = useHoverCard()
   const overlays = state.kind === 'ready' ? state.snapshot.overlays : undefined
-  const [receipts, setReceipts] = useState<ReceiptLine[]>([])
+  const receipts = useReceipts()
   const [pendingEquip, setPendingEquip] = useState<{ detail: ItemDetailView; summary: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState<ItemRow | null>(null)
@@ -127,16 +127,9 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
    */
   useEffect(() => {
     if (state.kind !== 'ready') return
-    const ids = state.snapshot.items.map((item) => item.id)
-    let index = 0
-    let timer = 0
-    const pump = (): void => {
-      const end = Math.min(index + 12, ids.length)
-      for (; index < end; index++) prefetchItemDetail(routePath, ids[index] as string)
-      if (index < ids.length) timer = window.setTimeout(pump, 120)
-    }
-    timer = window.setTimeout(pump, 400)
-    return () => window.clearTimeout(timer)
+    const controller = new AbortController()
+    warmDetails(routePath, controller.signal)
+    return () => controller.abort()
   }, [routePath, state])
 
   const load = useCallback((signal: AbortSignal, refresh: boolean): void => {
@@ -173,38 +166,45 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     return () => observer.disconnect()
   }, [])
 
-  const pushReceipt = useCallback((ok: boolean, text: string, detail: string): void => {
-    setReceipts((current) => [{ id: Date.now() + Math.random(), ok, text, detail }, ...current].slice(0, 3))
-  }, [])
+  const pushReceipt = useCallback(
+    (ok: boolean, text: string, detail: string): void => {
+      receipts.begin(text).settle(ok, detail)
+    },
+    [receipts],
+  )
 
   const runAction = useCallback(
-    async (request: ActionRequest, itemName: string, summary: string): Promise<ActionReceipt | null> => {
+    async (
+      request: ActionRequest,
+      itemName: string,
+      summary: string,
+      itemIcon?: string,
+    ): Promise<ActionReceipt | null> => {
       // Show the intent the moment it starts: the round trip takes seconds, and a
       // silent wait reads as a dropped drag.
-      const pendingId = Date.now() + Math.random()
-      setReceipts((current) =>
-        [{ id: pendingId, ok: true, pending: true, text: summary, detail: '正在处理…' }, ...current].slice(0, 3),
-      )
+      const controller = new AbortController()
+      const line = receipts.begin(summary, itemIcon, () => controller.abort())
       setBusy(true)
-      const settle = (ok: boolean, detail: string): void => {
-        setReceipts((current) =>
-          current.map((line) => (line.id === pendingId ? { ...line, ok, pending: false, detail } : line)),
-        )
-      }
       try {
-        const receipt = await postAction(routePath, request, itemName, new AbortController().signal)
-        if (!receipt.applied) {
-          settle(true, receipt.message)
-          return receipt
-        }
-        settle(true, receipt.message)
-        setReceipts((current) =>
-          current.map((line) => (line.id === pendingId ? { ...line, text: receipt.summary || summary } : line)),
-        )
-        load(new AbortController().signal, true)
+        const receipt = await postAction(routePath, request, itemName, controller.signal)
+        line.settle(true, receipt.message)
+        if (!receipt.applied) return receipt
+        if (receipt.summary !== '') line.rename(receipt.summary)
+        // Apply the change locally, the way DIM's `itemMoved` does. A refetch left
+        // the item visibly where it started for several seconds.
+        setState((current) => {
+          if (current.kind !== 'ready') return current
+          const items =
+            request.kind === 'move'
+              ? applyMove(current.snapshot.items, request.instanceId, request.destination ?? 'vault')
+              : request.kind === 'lock'
+                ? applyLock(current.snapshot.items, request.instanceId, request.locked === true)
+                : current.snapshot.items
+          return { ...current, snapshot: { ...current.snapshot, items } }
+        })
         return receipt
       } catch (error) {
-        settle(false, error instanceof Error ? error.message : String(error))
+        line.settle(false, error instanceof Error ? error.message : String(error))
         return null
       } finally {
         setBusy(false)
@@ -273,11 +273,12 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   const move = (item: ItemRow, destination: string): void => {
     if (item.locationKey === destination) return
-    const label = destination === 'vault' ? '仓库' : destination
+    const label = DESTINATION_LABEL[destination] ?? destination
     void runAction(
       { kind: 'move', instanceId: item.instanceId, destination },
       item.name,
       '把「' + item.name + '」移到' + label,
+      item.icon,
     )
   }
 
@@ -332,11 +333,25 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     hoverCard.close()
   }
 
+  /** One tile; shared by the flat list and the segmented vault. */
+  const renderTile = (item: ItemRow): ReactElement => (
+    <ItemTile
+      key={item.id}
+      item={item}
+      compact={item.inventoryBucketHash === 375726501}
+      overlays={overlays}
+      onOpen={hoverCard.show}
+      onDragStart={setDragging}
+      onDragEnd={() => setDragging(null)}
+    />
+  )
+
   /** One store cell: the worn slot, then the carried tiles. */
   const renderCell = (cell: StoreCell, shelf?: { id: string; capacity: number }): ReactElement => (
     <div
       key={cell.location}
       className={cls('dsh-destiny-cell', cell.flex && 'is-flex', dropTarget === cell.location && 'is-over')}
+      style={shelf?.id === 'engrams' ? ENGRAM_CELL_STYLE : undefined}
       data-shelf={shelf?.id}
       onDragOver={(event) => {
         // Unconditional: dragover only fires during a drag, and gating this on
@@ -359,9 +374,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
             item={cell.equipped}
             compact={shelf?.id === 'engrams'}
             overlays={overlays}
-                        onHover={(picked) => hoverCard.show(picked, false)}
-            onPin={(picked) => hoverCard.show(picked, true)}
-            onLeave={hoverCard.closeSoon}
+            onOpen={hoverCard.show}
             onDragStart={setDragging}
             onDragEnd={() => {
               setDragging(null)
@@ -370,23 +383,11 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           />
         </div>
       )}
-      <div className="dsh-destiny-cell__rest">
-        {cell.items.map((item) => (
-          <ItemTile
-            key={item.id}
-            item={item}
-            compact={shelf?.id === 'engrams'}
-            overlays={overlays}
-                        onHover={(picked) => hoverCard.show(picked, false)}
-            onPin={(picked) => hoverCard.show(picked, true)}
-            onLeave={hoverCard.closeSoon}
-            onDragStart={setDragging}
-            onDragEnd={() => {
-              setDragging(null)
-              setDropTarget(null)
-            }}
-          />
-        ))}
+      <div className="dsh-destiny-cell__rest" style={shelf?.id === 'engrams' ? ENGRAM_SHELF_STYLE : undefined}>
+        {cell.segments.length > 0 && (
+          <CellSegments segments={cell.segments} renderTile={renderTile} />
+        )}
+        {cell.segments.length === 0 && cell.items.map((item) => renderTile(item))}
         {shelf !== undefined &&
           cell.location !== 'vault' &&
           Array.from(
@@ -484,30 +485,14 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         ))}
       </div>
 
-      {receipts.length > 0 && (
-        <div className="dsh-destiny-receipts">
-          {receipts.map((line) => (
-            <div
-              key={line.id}
-              className={cls('dsh-destiny-receipt', !line.ok && 'is-error', line.pending && 'is-pending')}
-              title={line.detail}
-              role="status"
-              aria-busy={line.pending === true}
-            >
-              <span className="dsh-destiny-receipt__text">{line.text}</span>
-              <span className="dsh-destiny-receipt__detail">{line.detail}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <Receipts lines={receipts.lines} onDismiss={receipts.dismiss} />
 
       {hoverCard.target !== null && (
         <ItemDetailCard
           routePath={routePath}
           itemId={hoverCard.target.id}
           anchor={hoverCard.target.anchor}
-          onEnter={hoverCard.keepOpen}
-          onLeave={hoverCard.closeSoon}
+          anchorSummary={hoverCard.target.summary}
           onClose={hoverCard.close}
           onEquip={(detail) => void onEquip(detail)}
           onToggleLock={(detail) => void onToggleLock(detail)}

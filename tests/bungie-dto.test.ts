@@ -25,6 +25,8 @@ const definitions: DefinitionLookup = {
     stats: { 155624089: { value: 43, displayMaximum: 100 } },
     watermark: '',
     breakerType: 0,
+    classType: 3,
+    categoryHashes: [3, 6],
     craftingSocket: false,
     bucketTypeHash: 1498876634,
   }),

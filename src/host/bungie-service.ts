@@ -12,22 +12,21 @@ import { buildLookup } from '../bungie/lookup'
 import { ManifestStore } from '../bungie/manifest'
 import type { ManifestStatus } from '../bungie/manifest'
 import { pickPrimaryMembership, readMemberships } from '../bungie/memberships'
+import type { DestinyMembership } from '../bungie/memberships'
+import { readAllDetails } from './details-bulk'
 import { runItemWrite } from './item-write'
 import type { ItemWrite } from '../bungie/write'
 import { readProfile } from '../bungie/profile'
-import type { DestinyMembership } from '../bungie/memberships'
 import type { ProfileSnapshot } from '../bungie/profile'
 import { FileTokenProvider } from '../bungie/token-file-provider'
 import { AuthUnavailableError } from '../bungie/types'
 import { CLASS_LOCATION, toCharacterRow, toItemRows } from './dto'
 import type { CharacterSource, DefinitionLookup, ItemSource } from './dto'
-import type { InventorySnapshot, PlayerProfileView } from './types'
+import type { InventorySnapshot, ItemDetailView, PlayerProfileView } from './types'
 
-/** Default class names until a localized definition supplies one. */
 const CLASS_NAME: Record<number, string> = { 0: '泰坦', 1: '猎人', 2: '术士' }
 
 export interface BungieServiceOptions {
-  /** MCP token file; read-only, re-read on every upstream call. */
   tokenPath: string
   /** Manifest sqlite (definitions). */
   manifestPath: string
@@ -192,6 +191,7 @@ export class BungieService {
       power: item.power,
       gearTier: item.gearTier ?? 0,
       crafted: item.crafted,
+      masterwork: item.masterwork,
     }))
     const { rows } = toItemRows(
       sources,
@@ -226,10 +226,14 @@ export class BungieService {
     return { snapshot, definitions: this.definitions() }
   }
 
-  /** The game's own badge artwork; the client paints tiles from these URLs. */
+  /** Every detail in one payload; the client warms its cache in one request. */
+  async details(options: { force?: boolean } = {}): Promise<Record<string, ItemDetailView>> {
+    return readAllDetails(this, options)
+  }
+
+  /** Badge artwork for tiles; static for the life of the manifest. */
   overlays(): { crafted: string; craftedBackground: string; tiers: string[] } {
-    if (this.overlayCache === null) this.overlayCache = this.store().iconOverlays()
-    return this.overlayCache
+    return (this.overlayCache ??= this.store().iconOverlays())
   }
 
   /**

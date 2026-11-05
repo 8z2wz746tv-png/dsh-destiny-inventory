@@ -140,26 +140,26 @@ export function readItemDetailCached(
 }
 
 /**
- * Warm the cache for one item, ignoring failures.
+ * Warm every detail in one request.
  *
- * Called from an idle loop so the work never competes with the grid's own
- * rendering; a miss simply means the hover falls back to a normal request.
+ * Per-item prefetching lost the race with the pointer: 1924 requests, and the
+ * vault (most of the account) sat at the head of the queue. The host builds them
+ * all in one pass instead — DIM's approach, kept on our side.
  * @param routePath - bridge base pathname.
- * @param id - snapshot row id.
+ * @param signal - caller-owned cancellation.
  */
-export function prefetchItemDetail(routePath: string, id: string): void {
-  const key = cacheKey(routePath, id)
-  if (detailCache.has(key)) return
-  const pending = fetchItemDetail(routePath, id, new AbortController().signal)
-    .then((detail) => {
-      delivered.set(key, detail)
-      return detail
+export function warmDetails(routePath: string, signal: AbortSignal): void {
+  readBridge<Record<string, ItemDetailView>>(`${routePath}/details`, signal)
+    .then((all) => {
+      for (const [id, detail] of Object.entries(all)) {
+        const key = cacheKey(routePath, id)
+        delivered.set(key, detail)
+        detailCache.set(key, Promise.resolve(detail))
+      }
     })
     .catch(() => {
-      detailCache.delete(key)
-      return undefined as unknown as ItemDetailView
+      // Not fatal: any miss falls back to a per-item read on hover.
     })
-  detailCache.set(key, pending)
 }
 
 /**

@@ -114,6 +114,9 @@ export const HOVER_CARD_CSS = `
   box-shadow: 0 20px 56px rgba(0,0,0,.68), 0 0 0 1px rgba(0,0,0,.82);
   pointer-events: auto;
   animation: inventory-hover-in 130ms cubic-bezier(.22, 1, .36, 1);
+  /* Never taller than the window: the placement clamps to this. */
+  max-block-size: calc(100vh - 24px);
+  overflow-y: auto;
 }
 .inventory-hover-card.tier-exotic { --inventory-hover-tier: #d7c15d; --inventory-hover-header: #75652c; --inventory-hover-bar: #e4cf72; }
 .inventory-hover-card.tier-legendary { --inventory-hover-tier: #aa91bb; --inventory-hover-header: #5a426c; --inventory-hover-bar: #b79ac9; }

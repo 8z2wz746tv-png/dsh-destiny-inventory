@@ -32,6 +32,10 @@ export interface DefinitionLookup {
     watermark: string
     /** Champion counter: 0 none, 1 barrier, 2 overload, 3 unstoppable. */
     breakerType: number
+    /** Which class can wear it: 0 Titan, 1 Hunter, 2 Warlock, 3 any. */
+    classType: number | null
+    /** `itemCategoryHashes`, most specific last. */
+    categoryHashes: number[]
     /** Definition owns a crafting socket. */
     craftingSocket: boolean
   } | null

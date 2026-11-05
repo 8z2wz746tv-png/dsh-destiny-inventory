@@ -71,9 +71,23 @@ export function describeBungieError(code: number | undefined, status: number, fa
     default:
       if (status === 401) return '凭据无效或已过期。'
       if (status === 429) return '请求过于频繁，被上游限流。'
-      return fallback
+      // Upstream sentences are English and often name the fix; translate the ones
+      // a player actually meets rather than showing them the raw text.
+      return CHINESE_BY_UPSTREAM.find(([needle]) => fallback.includes(needle))?.[1] ?? fallback
   }
 }
+
+/** Upstream sentences worth translating, matched on a distinctive fragment. */
+const CHINESE_BY_UPSTREAM: [string, string][] = [
+  [
+    'logged in with a character',
+    '游戏里没有活跃角色：进一次游戏（主菜单或轨道即可）再试。Bungie 要求角色在线才能移动或装备物品。',
+  ],
+  ['ThrottledByGameServer', '操作太快，被游戏服务器限流：等几秒再试。'],
+  ['ItemNotFound', '这件物品已经不在了：刷新一下再操作。'],
+  ['DestinyItemNotFound', '这件物品已经不在了：刷新一下再操作。'],
+  ['not found', '上游找不到这个对象：刷新一下再试。'],
+]
 
 /**
  * One client per process is enough: it holds no state beyond its options.

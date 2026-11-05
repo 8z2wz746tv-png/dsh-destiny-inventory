@@ -111,8 +111,20 @@ export interface ItemRow {
   gearTier: number
   /** Forged at the Relic: DIM marks these with a red corner badge. */
   crafted: boolean
+  /** Masterworked: DIM paints the whole tile gold. */
+  masterwork: boolean
   /** Season watermark image (the icon's top-left corner). */
   watermark: string
+  /** Bungie `classType` of the item: 0 Titan, 1 Hunter, 2 Warlock, 3 any. */
+  classType: number
+  /** Bungie `itemCategoryHashes`, most specific last; drives the row glyph. */
+  categoryHashes: number[]
+  /** Localized ammo type (primary/special/heavy); empty for armor. */
+  ammoType: string
+  /** Localized damage-type name; empty when the definition reports none. */
+  damageType: string
+  /** `defaultDamageType` enum value, so groups sort in Bungie's order not A-Z. */
+  damageRank: number
   /** Champion this weapon counters: 0 none, 1 barrier, 2 overload, 3 unstoppable. */
   breakerType: number
 }
@@ -196,6 +208,8 @@ export interface ItemDetailView {
   itemLevel: number | null
   /** Forged at the Relic. */
   crafted: boolean
+  /** Masterworked: the tile paints its icon gold. */
+  masterwork: boolean
   /**
    * Kills the installed tracker has recorded, when one is socketed.
    *
@@ -205,6 +219,13 @@ export interface ItemDetailView {
   killCount: number | null
   /** Masterworked or enhanced. */
   enhanced: boolean
+  /**
+   * The exotic's own effect, drawn as its own block above the perks.
+   *
+   * DIM gives this a full row with the flavour text; without it the card reads as
+   * a pile of ordinary perks with no explanation of what makes the item exotic.
+   */
+  intrinsic: { name: string; description: string; icon: string } | null
   /** One line describing the current roll, as the tool words it. */
   rollSummary: string
 }

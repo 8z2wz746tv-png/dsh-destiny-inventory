@@ -11,9 +11,9 @@
  * from (`205` = equipment), and the upstream flag is kept only for diagnostics.
  */
 import { INVENTORY_COMPONENTS } from './components'
-import { readSockets } from './sockets'
-import { readObjectives } from './sockets'
-import type { ProfileSocket, RawPlugObjectives, RawReusable, RawSockets } from './sockets'
+import { toItem } from './profile-item'
+import { num, str } from './values'
+import type { ProfileSocket, RawPlugObjectives, RawReusable, RawSockets, RawStats } from './sockets'
 import type { BungieClient } from './client'
 
 /** Where an item sits right now: `vault`, or a character id. */
@@ -57,9 +57,17 @@ export interface ProfileItem {
   upstreamEquipped: boolean
   /** Player lock flag from the item's `state` bitfield (`DestinyItemState.Locked`). */
   locked: boolean
-  /** `state` bit 4: a weapon forged at the Relic. */
+  /**
+   * `state` bit 8: forged at the Relic.
+   *
+   * The bit values are Bungie's `DestinyItemState`: Locked=1, Tracked=2,
+   * **Masterwork=4**, **Crafted=8**, HighlightedObjective=16, Enhanced=32. Reading
+   * 4 as "crafted" tagged 933 of 1924 items; the real crafting bit is 8 (204).
+   */
   crafted: boolean
-  /** `state` bit 8: masterworked or enhanced. */
+  /** `state` bit 4: masterworked. 933 items carry it. */
+  masterwork: boolean
+  /** `state` bit 32: enhanced. */
   enhanced: boolean
   /** Component 300's `gearTier`: the tier letter the game prints (T1..T5). */
   gearTier: number | null
@@ -71,6 +79,8 @@ export interface ProfileItem {
    * Keyed by plug hash; the kill tracker lives here.
    */
   plugObjectives: Record<number, { objectiveHash: number; progress: number }[]>
+  /** Component 304: the instance's current stat values, by signed hash. */
+  stats: Record<number, number>
   /** Primary stat value (power) when upstream reported one. */
   power: number | null
   /**
@@ -107,7 +117,7 @@ export interface ProfileSnapshot {
 }
 
 /** Shape of the parts of GetProfile this module consumes. */
-interface RawItem {
+export interface RawItem {
   itemHash?: number
   itemInstanceId?: string
   quantity?: number
@@ -125,7 +135,7 @@ interface RawItemList {
   items?: RawItem[]
 }
 
-interface RawInstance {
+export interface RawInstance {
   /** Gear tier (component 300). */
   gearTier?: number
   /** Item level (component 300). */
@@ -164,6 +174,7 @@ export interface RawProfileResponse {
     sockets?: { data?: Record<string, RawSockets> }
     reusablePlugs?: { data?: Record<string, RawReusable> }
     plugObjectives?: { data?: Record<string, RawPlugObjectives> }
+    stats?: { data?: Record<string, RawStats> }
   }
 }
 
@@ -179,16 +190,6 @@ export const POSTMASTER_BUCKETS = new Set<number>([
   1367666825, // SpecialOrders
 ])
 
-/** Numeric field with a fallback. */
-function num(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-
-/** String field with a fallback. */
-function str(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback
-}
-
 /** Stable key for one raw item. Stackables share instance id "0", so hash+bucket is the key. */
 export function itemKey(raw: RawItem): string {
   const instanceId = str(raw.itemInstanceId, '0')
@@ -196,43 +197,6 @@ export function itemKey(raw: RawItem): string {
   return `${num(raw.itemHash)}:${num(raw.bucketHash)}`
 }
 
-/** Build one `ProfileItem` from a raw row plus where it was found. */
-function toItem(
-  raw: RawItem,
-  source: ProfileItem['source'],
-  location: ItemLocation,
-  characterId: string | null,
-  instances: Record<string, RawInstance>,
-  socketData: Record<string, RawSockets> = {},
-  reusableData: Record<string, RawReusable> = {},
-  objectiveData: Record<string, RawPlugObjectives> = {},
-): ProfileItem {
-  const instanceId = str(raw.itemInstanceId, '0')
-  const instance = instanceId === '' || instanceId === '0' ? undefined : instances[instanceId]
-  const socketRow = instanceId === '' || instanceId === '0' ? undefined : socketData[instanceId]
-  const reusableRow = instanceId === '' || instanceId === '0' ? undefined : reusableData[instanceId]
-  return {
-    key: itemKey(raw),
-    instanceId,
-    itemHash: num(raw.itemHash),
-    bucketHash: num(raw.bucketHash),
-    quantity: num(raw.quantity, 1),
-    source,
-    location,
-    characterId,
-    slotHash: source === 'equipment' ? num(raw.bucketHash) : null,
-    equipped: source === 'equipment',
-    upstreamEquipped: instance?.isEquipped === true,
-    locked: (num(raw.state) & 1) === 1,
-    crafted: (num(raw.state) & 4) === 4,
-    enhanced: (num(raw.state) & 8) === 8,
-    gearTier: typeof instance?.gearTier === 'number' ? instance.gearTier : null,
-    itemLevel: typeof instance?.itemLevel === 'number' ? instance.itemLevel : null,
-    plugObjectives: readObjectives(objectiveData[instanceId]),
-    power: typeof instance?.primaryStat?.value === 'number' ? instance.primaryStat.value : null,
-    sockets: readSockets(socketRow, reusableRow),
-  }
-}
 
 /**
  * Parse one GetProfile response into the grid model.
@@ -259,6 +223,9 @@ export function parseProfile(response: RawProfileResponse): ProfileSnapshot {
   const socketData = response.itemComponents?.sockets?.data ?? {}
   const reusableData = response.itemComponents?.reusablePlugs?.data ?? {}
   const objectiveData = response.itemComponents?.plugObjectives?.data ?? {}
+  const statData = response.itemComponents?.stats?.data ?? {}
+  /** Everything one row needs from the components, passed as one value. */
+  const parts = { instances, socketData, reusableData, objectiveData, statData }
 
   // Vault + account-wide buckets. Component 102 also carries the postmaster:
   // those rows keep their `characterId`, which is the only way to say whose
@@ -268,10 +235,10 @@ export function parseProfile(response: RawProfileResponse): ProfileSnapshot {
     []) {
     const bucketHash = num(raw.bucketHash)
     if (POSTMASTER_BUCKETS.has(bucketHash)) {
-      items.push(toItem(raw, 'postmaster', 'postmaster', str(raw.characterId) || null, instances, socketData, reusableData, objectiveData))
+      items.push(toItem(raw, 'postmaster', 'postmaster', str(raw.characterId) || null, parts))
       continue
     }
-    items.push(toItem(raw, 'profile', 'vault', null, instances, socketData, reusableData, objectiveData))
+    items.push(toItem(raw, 'profile', 'vault', null, parts))
   }
 
   // Carried by each character. The mailbox lives here too: Bungie delivers
@@ -280,17 +247,17 @@ export function parseProfile(response: RawProfileResponse): ProfileSnapshot {
   for (const [characterId, list] of Object.entries(response.characterInventories?.data ?? {})) {
     for (const raw of list.items ?? []) {
       if (POSTMASTER_BUCKETS.has(num(raw.bucketHash))) {
-        items.push(toItem(raw, 'postmaster', 'postmaster', characterId, instances, socketData, reusableData, objectiveData))
+        items.push(toItem(raw, 'postmaster', 'postmaster', characterId, parts))
         continue
       }
-      items.push(toItem(raw, 'character-inventory', characterId, characterId, instances, socketData, reusableData, objectiveData))
+      items.push(toItem(raw, 'character-inventory', characterId, characterId, parts))
     }
   }
 
   // Worn by each character — this is the only source of `equipped`.
   for (const [characterId, list] of Object.entries(response.characterEquipment?.data ?? {})) {
     for (const raw of list.items ?? []) {
-      const item = toItem(raw, 'equipment', characterId, characterId, instances, socketData, reusableData, objectiveData)
+      const item = toItem(raw, 'equipment', characterId, characterId, parts)
       items.push(item)
       equippedByBucket.set(`${characterId}:${item.bucketHash}`, item.instanceId)
     }

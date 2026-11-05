@@ -1,60 +1,41 @@
 /**
- * Hover-card state: preview on hover, pin on click, and a grace period so the
- * pointer can cross the gap between a tile and the card without dismissing it.
+ * The detail card's state: opened by a click, dismissed by clicking outside.
  *
- * Extracted from the panel because it is a self-contained interaction rule (and
- * because the panel is at its size ceiling).
+ * Previously a preview-on-hover card with a grace period. Hover previews kept
+ * opening while the pointer crossed the grid to reach something else, so the card
+ * is now a deliberate action: click a tile, click elsewhere to dismiss.
  */
-import { useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 /** What the card needs to render: which item and where to hang it. */
 export interface HoverTarget {
   id: string
   anchor: DOMRect
-  /** Clicked: survives the pointer leaving. */
-  pinned: boolean
+  /** The grid row, so the head can paint before the detail read returns. */
+  summary?: HoverSummary
 }
 
-/** Grace period between leaving a tile and the card closing. */
-const CLOSE_DELAY_MS = 160
+/** The fields a tile already knows, enough to draw the card's head. */
+export interface HoverSummary {
+  name: string
+  icon: string
+  type: string
+  rarity: string
+  power: number | null
+}
 
 export interface HoverCardController {
   target: HoverTarget | null
-  /** Preview or pin one item. */
-  show: (target: { id: string; anchor: DOMRect }, pinned: boolean) => void
-  /** Pointer is still nearby: cancel a pending close. */
-  keepOpen: () => void
-  /** Pointer left: close unless pinned. */
-  closeSoon: () => void
-  /** Close immediately. */
+  /** Open the card for one item. */
+  show: (target: HoverTarget) => void
+  /** Dismiss it. */
   close: () => void
 }
 
-/** Wire the hover/pin lifecycle into a component. */
+/** Wire the click-to-open lifecycle into a component. */
 export function useHoverCard(): HoverCardController {
   const [target, setTarget] = useState<HoverTarget | null>(null)
-  const timer = useRef<number | null>(null)
-
-  const keepOpen = (): void => {
-    if (timer.current === null) return
-    window.clearTimeout(timer.current)
-    timer.current = null
-  }
-
-  const closeSoon = (): void => {
-    keepOpen()
-    timer.current = window.setTimeout(() => {
-      timer.current = null
-      setTarget((current) => (current !== null && current.pinned ? current : null))
-    }, CLOSE_DELAY_MS)
-  }
-
-  const show = (next: { id: string; anchor: DOMRect }, pinned: boolean): void => {
-    keepOpen()
-    // Visible trace while the card is being wired up: if this never prints, the
-    // tile never fired and the problem is upstream of rendering.
-    setTarget({ ...next, pinned })
-  }
-
-  return { target, show, keepOpen, closeSoon, close: () => setTarget(null) }
+  const show = useCallback((next: HoverTarget) => setTarget(next), [])
+  const close = useCallback(() => setTarget(null), [])
+  return { target, show, close }
 }

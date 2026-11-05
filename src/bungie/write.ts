@@ -41,14 +41,18 @@ export async function transferItem(
   instanceId: string,
   itemHash: number,
   toVault: boolean,
-  characterId?: string,
+  characterId: string,
 ): Promise<void> {
+  // `characterId` is always a real character, never "0": DIM sends the item's
+  // current owner when banking (`store.isVault ? item.owner : store.id`), and
+  // Bungie answers anything else with "you have to be logged in with a
+  // character" — which reads like an online requirement but is really a bad id.
   await client.post(`/Destiny2/Actions/Items/TransferItem/`, {
     itemReferenceHash: itemHash,
     stackSize: 1,
     transferToVault: toVault,
     itemId: instanceId,
-    characterId: characterId ?? '0',
+    characterId,
     membershipType: target.membershipType,
   })
 }

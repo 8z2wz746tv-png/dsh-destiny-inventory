@@ -65,3 +65,25 @@ export const NO_BAR = new Set<number>([
 
 /** Recoil direction draws as a gauge, not a bar (DIM's `RecoilStat`). */
 export const RECOIL_DIRECTION = -1579127956
+
+/**
+ * Armor's six stats, in the order the game lists them.
+ *
+ * Separate from `STAT_ORDER`: that is the weapon table, and an armor piece has
+ * none of those stats, so without this every armor stat fell to the hash-ordered
+ * tail and the sheet read in a meaningless order.
+ */
+export const ARMOR_STAT_ORDER: number[] = [
+  392767087, // Health
+  -50400078, // Melee
+  1735777505, // Grenade
+  144602215, // Super
+  1943323491, // Class
+  -1298820321, // Weapons
+]
+
+/** Display position for one armor stat; unlisted ones sort after, by hash. */
+export function armorStatSortOrder(hash: number): number {
+  const index = ARMOR_STAT_ORDER.indexOf(hash)
+  return index === -1 ? 999999 + Math.abs(hash) : index
+}

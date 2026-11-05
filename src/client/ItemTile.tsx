@@ -8,6 +8,7 @@
 import type { ReactElement } from 'react'
 import type { DragEvent } from 'react'
 import type { ItemRow } from '../host/types'
+import type { HoverSummary } from './use-hover-card'
 
 /** Join class names, dropping falsy entries. */
 function cls(...names: (string | false | null | undefined)[]): string {
@@ -21,9 +22,7 @@ export function ItemTile({
   item,
   compact = false,
   overlays,
-  onHover,
-  onPin,
-  onLeave,
+  onOpen,
   onDragStart,
   onDragEnd,
 }: {
@@ -32,11 +31,7 @@ export function ItemTile({
   item: ItemRow
   /** The game's badge artwork, handed down with the snapshot. */
   overlays?: { crafted: string; craftedBackground: string; tiers: string[] }
-  onHover: (target: { id: string; anchor: DOMRect }) => void
-  /** Click pins the card open. */
-  onPin: (target: { id: string; anchor: DOMRect }) => void
-  /** Pointer left the tile: the panel decides whether to close. */
-  onLeave: () => void
+  onOpen: (target: { id: string; anchor: DOMRect; summary: HoverSummary }) => void
   onDragStart: (item: ItemRow) => void
   onDragEnd: () => void
 }): ReactElement {
@@ -53,18 +48,27 @@ export function ItemTile({
   const tooltip = facts.filter((fact): fact is string => fact !== null).join(' · ')
   return (
     <div
-      className={cls('dsh-destiny-tile', 'r-' + item.rarity, compact && 'is-compact')}
+      className={cls(
+        'dsh-destiny-tile',
+        'r-' + item.rarity,
+        item.masterwork && 'is-masterwork',
+        compact && 'is-compact',
+      )}
       title={tooltip}
       data-locked={item.locked ? '1' : '0'}
       data-equipped={item.equipped}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
-      onMouseEnter={(event) =>
-        onHover({ id: item.id, anchor: event.currentTarget.getBoundingClientRect() })
-      }
-      onClick={(event) => onPin({ id: item.id, anchor: event.currentTarget.getBoundingClientRect() })}
-      onMouseLeave={() => onLeave()}
+      onClick={(event) => {
+        // One gesture: the card opens on click and closes on a click outside.
+        event.stopPropagation()
+        onOpen({
+          id: item.id,
+          anchor: event.currentTarget.getBoundingClientRect(),
+          summary: { name: item.name, icon: item.icon, type: item.type, rarity: item.rarity, power: item.power },
+        })
+      }}
     >
       {item.icon === '' ? (
         <div className="dsh-destiny-tile__icon" />
