@@ -7,6 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
 import { readItemDetail } from './host/item-detail'
+import { BungieApiError } from './bungie/client'
 import { AuthUnavailableError } from './bungie/types'
 import { BungieService } from './host/bungie-service'
 import { toItemWrite } from './bungie/write'
@@ -54,10 +55,15 @@ function toFailure(error: unknown): { code: string; message: string } {
     // Never paper over this: the browser half shows the reason verbatim.
     return { code: 'AUTH_UNAVAILABLE', message: `认证不可用（${error.reason}）：${error.message}` }
   }
+  if (error instanceof BungieApiError) {
+    // Upstream already wrote a specific sentence; say who refused and keep it.
+    return { code: error.errorStatus || 'UPSTREAM', message: `Bungie 拒绝了这次请求：${error.message}` }
+  }
   if (error instanceof Error) {
     const code =
       'code' in error && typeof error.code === 'string' ? error.code : error.name || 'BridgeError'
-    return { code, message: error.message }
+    // A bare upstream message is unreadable; name the next step instead.
+    return { code, message: `${error.message}（处理不了就重启 DSH 再试，宿主日志里有栈）` }
   }
   return { code: 'BridgeError', message: String(error) }
 }

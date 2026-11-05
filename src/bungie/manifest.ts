@@ -16,7 +16,7 @@ import { hasCraftingSocket, parseDamageTypes, parseOverlays, readStatValues } fr
 import { DatabaseSync } from 'node:sqlite'
 
 /** Why the definition database cannot answer right now. */
-export type ManifestFailure = 'missing' | 'unreadable' | 'empty'
+export type ManifestFailure = 'missing' | 'unreadable' | 'empty' | 'query-failed'
 
 /** Raised only for callers that explicitly require definitions. */
 export class ManifestUnavailableError extends Error {
@@ -105,7 +105,6 @@ const TABLE = {
 
 type TableKey = keyof typeof TABLE
 
-/** Icon paths are relative to bungie.net. */
 const ICON_ORIGIN = 'https://www.bungie.net'
 
 /** Bound the cache: an account touches ~2k items but a session can browse more. */
@@ -281,6 +280,7 @@ export class ManifestStore {
       }[]
       for (const [value, info] of parseDamageTypes(rows, ICON_ORIGIN)) this.damageTypes.set(value, info)
     } catch {
+      this.failure = 'query-failed'
       return empty
     }
     return this.damageTypes.get(enumValue) ?? empty
@@ -303,6 +303,7 @@ export class ManifestStore {
       if (typeof row?.json !== 'string') return empty
       return parseOverlays(JSON.parse(row.json), ICON_ORIGIN)
     } catch {
+      this.failure = 'query-failed'
       return empty
     }
   }

@@ -402,3 +402,25 @@ export const GLYPH_CSS = `
 }
 .inventory-hover-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 `
+
+/** Detail-card actions: equipped and locked, the two things a hover card can do. */
+export const DETAIL_ACTIONS_CSS = `
+.inventory-hover-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 13px;
+  border-block-end: 1px solid rgba(255, 255, 255, .09);
+}
+.inventory-hover-actions button {
+  flex: 1 1 0;
+  min-height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  background: rgba(255, 255, 255, .06);
+  color: #eee9f0;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.inventory-hover-actions button:hover { background: rgba(255, 255, 255, .14); }
+`

@@ -26,35 +26,6 @@ function fakeContext(options: {
 }
 
 /** The exact envelope shape destiny MCP tools answer with, condensed. */
-function profileEnvelope(characters: unknown[]): unknown {
-  const body = {
-    ok: true,
-    summary: '已读取玩家档案。',
-    data: {
-      profile: {
-        display_name: 'OneTop丶Husky#6641',
-        membership_id: '4611686018492803873',
-        membership_type: 3,
-        characters,
-        triumph_score: 23650,
-      },
-    },
-    candidates: [],
-    next_actions: [],
-    warnings: [],
-  }
-  return { content: [{ type: 'text', text: JSON.stringify(body) }] }
-}
-
-const HUNTER = {
-  id: '2305843009679355779',
-  class_type: 1,
-  class_name: '猎人',
-  light: 547,
-  emblem_path: '/common/hunter.jpg',
-  last_played: '2026-10-06T14:43:35Z',
-}
-
 describe('destinyToolName', () => {
   it('namespaces the tool the way dsh-mcp-client registers it', () => {
     expect(destinyToolName('destiny', 'player_assistant')).toBe('mcp__destiny__player_assistant')

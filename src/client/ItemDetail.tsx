@@ -70,6 +70,8 @@ export function ItemDetailCard({
   onEnter,
   onLeave,
   onClose,
+  onEquip,
+  onToggleLock,
 }: {
   routePath: string
   itemId: string
@@ -79,6 +81,10 @@ export function ItemDetailCard({
   /** Pointer left the card: let the panel decide whether to close. */
   onLeave: () => void
   onClose: () => void
+  /** Equip this item; the panel owns the confirmation flow. */
+  onEquip: (detail: ItemDetailView) => void
+  /** Toggle the item's lock. */
+  onToggleLock: (detail: ItemDetailView) => void
 }): ReactElement {
   // Start from the cache when it has this item: a hit must paint content on the
   // very first frame, not flash "reading…" while a promise resolves.
@@ -106,6 +112,15 @@ export function ItemDetailCard({
     )
     return () => controller.abort()
   }, [routePath, itemId])
+
+  // A pinned card has no pointer to leave it, so Escape is its only exit.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const position = place(anchor)
   const ammoCode = state.kind === 'ready' ? (AMMO_CODE[state.detail.ammoType] ?? 0) : 0
@@ -166,6 +181,15 @@ export function ItemDetailCard({
               {state.detail.damageType !== '' && <span>{state.detail.damageType}</span>}
               {state.detail.locked && <span>已锁定</span>}
               {state.detail.equipped === 'equipped' && <span>当前装备</span>}
+            </div>
+
+            <div className="inventory-hover-actions">
+              <button type="button" onClick={() => onEquip(state.detail)}>
+                装备
+              </button>
+              <button type="button" onClick={() => onToggleLock(state.detail)}>
+                {state.detail.locked ? '解锁' : '锁定'}
+              </button>
             </div>
 
             {state.detail.killCount !== null && (

@@ -12,10 +12,10 @@ import type {
 } from '../host/types'
 import { fetchCharacters, fetchInventory, postAction, prefetchItemDetail } from './api'
 import { ItemDetailCard } from './ItemDetail'
-import { DEFAULT_FILTERS, STORE_COLUMNS, availableTypes, buildSections, emptyShelfSections } from './filter'
+import { DEFAULT_FILTERS, availableTypes, buildSections, emptyShelfSections } from './filter'
 import { InventoryToolbar } from './InventoryToolbar'
 import { ItemTile } from './ItemTile'
-import type { CategoryFilter, InventoryFilters, LayoutMode, SortKey, StoreCell, TypeRow } from './filter'
+import type { InventoryFilters, LayoutMode, StoreCell } from './filter'
 
 type LoadState =
   | { kind: 'loading' }
@@ -509,6 +509,8 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           onEnter={hoverCard.keepOpen}
           onLeave={hoverCard.closeSoon}
           onClose={hoverCard.close}
+          onEquip={(detail) => void onEquip(detail)}
+          onToggleLock={(detail) => void onToggleLock(detail)}
         />
       )}
 
