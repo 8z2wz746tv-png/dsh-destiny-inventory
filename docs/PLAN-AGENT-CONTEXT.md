@@ -1,135 +1,120 @@
-# P3：让界面上的操作进 agent 上下文
+# P3：让界面上的操作进 agent 上下文（按原计划规格重写）
 
-写于 2026-11-06。目标：这个面板不是"另一个 DIM"，是**给 agent 供料的手**。
+2026-11-06 第二版。第一版偏离了 `PLAN-SELF-HOSTED-DIM.md` §4，`CONTEXT-PLAN-DIFF.md` 里已对账。
+这一版把偏离的地方改回去了，唯一保留的新增是"自动上下文"。
 
 ## 一句话
 
-用户在界面上做的每一件事（筛选、选中、拖拽、装备、锁定），都变成 agent 下一轮能直接读到的**事实**，而不是要靠他去问"你刚才干了什么"。
+界面上的每一件事（筛选、选中、拖拽、装备、锁定）都变成 agent 下一轮能直接读到的事实。
 
-## DSH 提供的两条路（已确认可用）
+## 沿用原计划的部分（不改名、不缩水）
 
-`dsh-base` 里带了 `@deepseek-ai/dsh-system-prompt`（`cordis.patch.yml:503`），它有两种贡献：
-
-| 机制 | 形态 | 适合 |
-|---|---|---|
-| `ctx.systemPrompt.section()` | **静态**文本，进系统提示词 | 工具用法说明、"这个插件是什么" |
-| `ctx.systemPrompt.context()` | **动态**快照，进模型历史的 **user 角色消息** | 用户当前状态、最近操作 |
-
-文档原话：*"上下文在循环下成为模型历史中带来源的 user 角色快照"*。
-
-**我们要的是第二种**。上下文 provider 每次组装时被重新读取，所以状态变了就自动反映，不用手动推消息。
-
-## 上下文存什么
-
-宿主半维护一份 `ContextStore`：
+### ViewContext —— 原样
 
 ```ts
-interface SessionContext {
-  /** 当前筛选：搜索词、分类、锁定、排序、分组。 */
+interface ViewContext {
+  /** 当前角色（hunter/warlock/titan），用户切了就该反映。 */
+  character: string
   filters: { search: string; category: string; lock: string; sort: string }
-  /** 选中的物品，最多一件——选中是"我在看这个"的信号。 */
-  selected: { id: string; name: string; type: string; rarity: string; power: number | null } | null
-  /** 最近 8 条写入，新的在前。 */
-  actions: ActionRecord[]
-  /** 快照时间与件数，让 agent 知道数据新不新。 */
-  snapshot: { at: number; items: number }
-}
-
-interface ActionRecord {
-  at: number
-  /** 谁发起的：界面拖拽，还是回读时发现是别人做的。 */
-  source: 'ui' | 'agent-detected'
-  kind: 'move' | 'equip' | 'lock' | 'pull_postmaster'
-  item: { id: string; name: string }
-  /** 一句话结果，例如「已存入仓库」或「Bungie 拒绝了：…」。 */
-  outcome: string
-  ok: boolean
+  selected: { instanceId: string; hash: number; name: string; location: string } | null
+  /** 最近一次拖拽的落点，拖拽中途也有值。 */
+  lastDropTarget: string | null
 }
 ```
 
-**不存**：完整物品列表（那是工具的事）、perk 细节、悬停过的每一件（只有"选中"有意义）。
+### Journal —— 原样
 
-## 两条通道
-
-### 1. 自动（`ctx.systemPrompt.context`）
-
-每次模型调用前组装，只有当**内容变了**才更新。渲染成一段紧凑文本：
-
-```
-[命运仓库 · 界面状态]
-筛选：武器 / 未锁定 / 按光等 / 按类型分组 · 搜索「快速」
-选中：快速拔枪（手炮·传说·550）
-最近操作：
-  1 分钟前 移到仓库「英勇利刃」→ 已存入仓库
-  3 分钟前 装备「星火协议」→ 已装备
-快照：1924 件，2 分钟前读取
-```
-
-约 120 字。**不渲染就不推**——用户不动，上下文不变，历史里不会堆重复。
-
-### 2. 按需（两个工具）
+环形 **200 条**，字段照原计划：
 
 ```ts
-ctx.tools.register(defineTool({
-  name: 'destiny_context',
-  description: '这个仓库面板现在的状态：筛选、选中、最近的写入。用户说「我刚拖的那件」时先用它。',
-  parameters: {},
-  output: { schema: { type: 'json' }, render: (_, v) => [{ type: 'text', text: JSON.stringify(v, null, 2) }] },
-  execute: () => store.read(),
-}))
-
-ctx.tools.register(defineTool({
-  name: 'destiny_actions',
-  description: '最近的写入流水，含失败原因。查「刚才那次为什么失败」用它。',
-  parameters: { limit: { type: 'number', description: '条数，默认 10，最多 50' } },
-  output: { schema: { type: 'json' }, render: ... },
-  execute: ({ limit }) => store.recent(Math.min(limit ?? 10, 50)),
-}))
+interface JournalEntry {
+  at: number
+  action: 'move' | 'equip' | 'lock' | 'pull_postmaster'
+  item: { instanceId: string; hash: number; name: string }
+  /** 结构化，不是一句话。 */
+  from: string | null
+  to: string | null
+  result: 'ok' | 'failed' | 'unconfirmed'
+  source: 'ui' | 'agent-detected'
+  /** 失败原因原文，成功时为空。 */
+  detail: string
+}
 ```
 
-**只读**。写操作仍然只有界面能做——这条边界不破。
+**落盘**：`~/.dsh/destiny-workspace/journal.jsonl`，追加写，保留最近 200 条。内存仍是唯一真源，落盘只为排查。
 
-## 浏览器怎么把状态送上来
+`result` 值是 `ok | failed | unconfirmed`——原计划的第三个是 `rolledback`，现在不做回滚了（见 `PLAN-SELF-HOSTED-DIM.md` §3.2），换成 `unconfirmed`。
 
-宿主已有 `/action` 的 POST 通道，加一个 `/context`：
+### 两个工具 —— 原名
+
+```ts
+destiny_workspace_view()            // 当前视图快照
+destiny_workspace_journal({limit})  // 最近操作流水，默认 20，最多 200
+```
+
+### 专用预设 —— 原样（§4.3）
+
+`~/.dsh/.agent-presets/destiny/`：
+
+- `preset.yml`：`name: 命运随航`
+- `agent.cordis.yml`：只挂 `dsh-persona`、`dsh-skill-filesystem` + `dsh-tool-skill`（技能 `destiny2-mcp`、`destiny2-render`）、计划/压缩分组；**不挂** `tool-bash`、`tool-pwsh`、`tool-fs-search`
+
+### persona 那句话 —— 原样
+
+> 用户说"这件/刚才那件/我刚拖的"时，先调 `destiny_workspace_view` / `destiny_workspace_journal`，不要反问。
+
+## 唯一的新增：自动上下文
+
+原计划只有"agent 主动调工具"。加一条自动注入：
+
+`ctx.systemPrompt.context()` 的贡献会变成**模型历史里带来源的 user 角色快照**，每次组装重新读取。所以用户一拖完，**下一条消息里 agent 就已经知道**，不用等它想起来调工具。
+
+渲染格式（约 120 字，**内容没变就不重新推送**）：
 
 ```
-POST /context  { filters, selected }
+[命运仓库] 猎人 · 武器/未锁定/按光等 · 搜索「快速」
+选中：快速拔枪（手炮·传说·550）
+最近：1 分钟前 英勇利刃 → 仓库 · 成功
+     3 分钟前 星火协议 → 装备 · 成功
+快照 1924 件，2 分钟前
 ```
 
-规则：
-- **节流 200 ms**（打字时不要每次按键都发）
-- **只在变化时发**（前端比对上一次的快照）
-- **载荷 < 2 KB**（只发上面那几个字段，不发物品列表）
+**为什么敢加**：查过 `dsh-base` 自带 `@deepseek-ai/dsh-system-prompt`（`cordis.patch.yml:503`），机制可用。**为什么只给 3 条**：上下文里放 200 条会淹没对话；200 条留给工具查。
 
-写入流水**不需要前端推**——`/action` 成功/失败时宿主自己记。
+## 数据流
 
-## `agent-detected` 从哪来
+```
+浏览器 ──POST /context（节流 200ms，仅变化时）──→ 宿主 ViewContext
+界面写入 ──/action───────────→ 宿主 Journal（自动记，不用前端推）
+                                    ↓
+              ctx.systemPrompt.context 每次组装读取
+                                    ↓
+                        模型历史里的 user 快照（仅变化时）
+```
 
-计划 §3.3 要的另一种来源：agent 通过 MCP 改了东西，前端不知情。
+`agent-detected`：`/inventory` 返回时比对——某件物品位置变了但最近 30 秒没有 `ui` 记录 → 记一条 `agent-detected`，**不弹回执**。
 
-实现：`/inventory` 返回时，把新快照与本地记录比对——
-- 某件物品的 `locationKey` 变了，但最近 30 秒内没有对应的 `ui` 记录
-- → 记一条 `source: 'agent-detected'`，不弹回执（不是用户干的，不该打扰他）
+## 实现顺序
 
-这让 agent 问"我刚改了 3 件，界面看到了吗"时有据可查。
-
-## 不做的
-
-- **不做**"把每件悬停过的物品都记下来"。悬停是浏览噪声，选中才是意图。
-- **不做**双向：agent 不能通过这个通道反过来控制界面。**看，不动。**
-- **不做**独立数据库。内存即可，进程退出就没了——这些是会话状态，不是用户资产。
+1. `src/host/context-store.ts` —— ViewContext + Journal + jsonl 追加写
+2. `/context` POST 端点（节流由前端做）
+3. `/action` 成功后记 journal（含 `from`/`to`）
+4. `src/host/agent-tools.ts` —— 两个 `ctx.tools.register`
+5. `src/host/prompt-context.ts` —— `ctx.systemPrompt.context` 贡献
+6. 预设目录（`~/.dsh/.agent-presets/destiny/`）
+7. `agent-detected` 检测（最后做）
 
 ## 验收
 
-1. 拖一件武器到仓库 → 下一轮问 agent「我刚做了什么」，他不查工具也能答对（自动上下文里有）
-2. 问「我刚才那次为什么失败」→ agent 调 `destiny_actions`，能念出上游原因
-3. 什么都不做，连续发三条消息 → 系统提示词里那段**不重复出现**（内容没变）
-4. 打字搜索时，`/context` 请求数 ≤ 每秒 5 次（节流生效）
-5. agent 通过 MCP 移动一件 → 界面回读后出现 `source: 'agent-detected'` 的记录
+1. 拖一件 → 下一轮问「我刚做了什么」，agent **不调工具**就能答（自动上下文里有）
+2. 问「刚才那次为什么失败」→ 调 `destiny_workspace_journal`，念出 `detail` 原文
+3. 什么都不做连发三条 → 那段**不重复出现**
+4. 打字时 `/context` ≤ 每秒 5 次
+5. `~/.dsh/destiny-workspace/journal.jsonl` 里有记录，重启后还在
+6. agent 通过 MCP 改东西 → 出现 `source: 'agent-detected'` 的记录
 
-## 与 STATUS.md 的关系
+## 边界
 
-这是 `PLAN-SELF-HOSTED-DIM.md` 的 P3。做完它，这个项目才从"DIM 替代品"变成"给 agent 供料的界面"。
-
-顺序：**先做本方案的自动上下文 + 两个工具**（这是核心），`agent-detected` 检测可以后补。
+- agent **只能看，不能驱动界面**。写操作只有界面能做。
+- 悬停不记（浏览噪声），只记选中。
+- journal 不进数据库，就是追加写的 jsonl。
