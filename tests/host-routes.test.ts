@@ -6,7 +6,7 @@
  * boundary: status codes, error codes and the wire shape the browser reads.
  */
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
@@ -34,7 +34,8 @@ function mount(config: ConfigShape): Handler {
         return () => {}
       },
     },
-    tools: {},
+    // The plugin registers two tools at activation; this stub just accepts them.
+    tools: { register: () => () => {} },
   } as unknown as Context
   apply(ctx, config)
   if (captured === undefined) throw new Error('route was not registered')
@@ -75,6 +76,8 @@ const baseConfig: ConfigShape = {
   tokenPath,
   manifestPath,
   apiKeyFile: envFile,
+  // A temp file: a test run must not append to the real journal.
+  journalPath: join(tmpdir(), 'destiny-test-journal.jsonl'),
 }
 
 describe('config defaults', () => {

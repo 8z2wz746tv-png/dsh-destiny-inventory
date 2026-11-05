@@ -227,6 +227,11 @@ export class BungieService {
     return { snapshot, definitions: this.definitions() }
   }
 
+  /** The location key an item is in right now; null when the snapshot lacks it. */
+  async locationOf(instanceId: string): Promise<string | null> {
+    return (await this.currentSnapshot()).items.find((e) => e.instanceId === instanceId)?.location ?? null
+  }
+
   /** Where one item is right now; `null` when it is gone. */
   async itemState(instanceId: string) {
     return resolveItemState(await this.platform(), await this.currentMembership(), await this.currentSnapshot(), instanceId)

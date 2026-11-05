@@ -18,6 +18,8 @@ export interface Config {
   tokenPath: string
   /** Manifest sqlite holding item/bucket/plug definitions. */
   manifestPath: string
+  /** Append-only write journal the agent reads to answer "did that work". */
+  journalPath: string
   /** File that defines `BUNGIE_API_KEY` (MCP's .env until the broker exists). */
   apiKeyFile: string
 }
@@ -32,6 +34,9 @@ export const Config: Schema<Config> = Schema.object({
   tokenPath: Schema.string()
     .default(join(homedir(), '.destiny_mcp', 'tokens.json'))
     .description('MCP token file (read-only; this side never refreshes it).'),
+  journalPath: Schema.string()
+    .default(join(homedir(), '.dsh', 'destiny-workspace', 'journal.jsonl'))
+    .description('Append-only write journal; the agent reads it to answer "did that work".'),
   manifestPath: Schema.string()
     .default(join(homedir(), '项目', 'destiny2-mcp', 'manifest', 'destiny_manifest_zh.sqlite3'))
     .description('Manifest sqlite used for item/bucket/plug definitions.'),

@@ -17,6 +17,8 @@ import { InventoryToolbar } from './InventoryToolbar'
 import { applyLock, applyMove, settleMove } from './apply-move'
 import { settleByReadBack } from './settle-by-readback'
 import { Receipts } from './Receipts'
+import { useViewReport } from './use-view-report'
+import { viewOf } from './view-reporter'
 import { useReceipts } from './use-receipts'
 import { CellSegments } from './CellSegments'
 import { ENGRAM_CELL_STYLE, ENGRAM_SHELF_STYLE } from './segments'
@@ -242,6 +244,11 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const types = useMemo(() => availableTypes(items), [items])
   const visibleCount = sections.reduce((sum, section) => sum + section.itemCount, 0)
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
+
+
+  // The agent answers "this one" from here.
+  const picked = hoverCard.target === null ? undefined : itemById.get(hoverCard.target.id)
+  useViewReport(routePath, viewOf(activeCharacter, filters, picked, dropTarget))
 
   const characterByLocation = useMemo(() => {
     const map = new Map<string, CharacterRow>()
