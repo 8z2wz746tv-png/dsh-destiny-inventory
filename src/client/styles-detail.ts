@@ -390,3 +390,15 @@ export const ENHANCED_ARROW_CSS = `
   pointer-events: none;
 }
 `
+
+/** Damage and ammo glyphs inside the meta row. */
+export const GLYPH_CSS = `
+.inventory-hover-glyph {
+  inline-size: 12px;
+  block-size: 12px;
+  object-fit: contain;
+  vertical-align: -2px;
+  opacity: .92;
+}
+.inventory-hover-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+`

@@ -7,8 +7,10 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactElement } from 'react'
-import type { ItemDetailView } from '../mcp/types'
-import { readItemDetailCached } from './api'
+import type { ItemDetailView } from '../host/types'
+import { AMMO_CODE, AMMO_ICON } from './ammo-icons'
+import { RecoilGauge } from './RecoilGauge'
+import { peekItemDetail, readItemDetailCached } from './api'
 
 type LoadState =
   | { kind: 'loading' }
@@ -25,36 +27,6 @@ function tierClass(rarity: string): string {
   return rarity === 'unknown' ? '' : `tier-${rarity}`
 }
 
-/**
- * Recoil direction as a gauge, ported from DIM's `RecoilStat`.
- *
- * Positive value leans right, negative left, zero straight up; a value of 95+
- * draws a straight line instead of a fan because the spread is already tiny.
- * @param props - the stat value (0..100).
- */
-function RecoilGauge({ value }: { value: number }): ReactElement {
-  const direction = (Math.sin(((value + 5) * Math.PI) / 10) * (100 - value) * 0.8 * Math.PI) / 180
-  const x = Math.sin(direction)
-  const y = Math.cos(direction)
-  const spread = ((100 - value) / 100) * 90 * (Math.PI / 180) * Math.sign(direction)
-  const xMore = Math.sin(direction + spread)
-  const yMore = Math.cos(direction + spread)
-  const xLess = Math.sin(direction - spread)
-  const yLess = Math.cos(direction - spread)
-  return (
-    <svg className="dsh-destiny-recoil" viewBox="0 0 2 1" aria-label={`后坐方向 ${value}`}>
-      <circle r={1} cx={1} cy={1} fill="#333" />
-      {value >= 95 ? (
-        <line x1={1 - x} y1={1 + y} x2={1 + x} y2={1 - y} stroke="white" strokeWidth="0.1" />
-      ) : (
-        <path
-          d={`M1,1 L${1 + xMore},${1 - yMore} A1,1 0 0,${direction < 0 ? '1' : '0'} ${1 + xLess},${1 - yLess} Z`}
-          fill="#fff"
-        />
-      )}
-    </svg>
-  )
-}
 
 /** Localized rarity label. */
 function tierLabel(rarity: string): string {
@@ -108,9 +80,19 @@ export function ItemDetailCard({
   onLeave: () => void
   onClose: () => void
 }): ReactElement {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  // Start from the cache when it has this item: a hit must paint content on the
+  // very first frame, not flash "reading…" while a promise resolves.
+  const [state, setState] = useState<LoadState>(() => {
+    const ready = peekItemDetail(routePath, itemId)
+    return ready === null ? { kind: 'loading' } : { kind: 'ready', detail: ready }
+  })
 
   useEffect(() => {
+    const ready = peekItemDetail(routePath, itemId)
+    if (ready !== null) {
+      setState({ kind: 'ready', detail: ready })
+      return
+    }
     const controller = new AbortController()
     setState({ kind: 'loading' })
     readItemDetailCached(routePath, itemId, controller.signal).then(
@@ -126,6 +108,7 @@ export function ItemDetailCard({
   }, [routePath, itemId])
 
   const position = place(anchor)
+  const ammoCode = state.kind === 'ready' ? (AMMO_CODE[state.detail.ammoType] ?? 0) : 0
 
   const card = (
     <aside
@@ -158,6 +141,22 @@ export function ItemDetailCard({
 
           <div className="inventory-hover-body">
             <div className="inventory-hover-meta">
+              {state.detail.damageIcon !== '' && (
+                <img
+                  className="inventory-hover-glyph"
+                  src={state.detail.damageIcon}
+                  alt=""
+                  title={state.detail.damageType}
+                />
+              )}
+              {AMMO_ICON[ammoCode] !== undefined && (
+                <img
+                  className="inventory-hover-glyph"
+                  src={AMMO_ICON[ammoCode]}
+                  alt=""
+                  title={state.detail.ammoType}
+                />
+              )}
               {state.detail.gearTier !== null && state.detail.gearTier > 0 && (
                 <span title="装备阶级">T{state.detail.gearTier}</span>
               )}

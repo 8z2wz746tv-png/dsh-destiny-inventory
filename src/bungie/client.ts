@@ -140,4 +140,47 @@ export class BungieClient {
     }
     return envelope.Response
   }
+
+  /**
+   * POST one platform action and unwrap its envelope.
+   *
+   * The write endpoints take a JSON body and answer with the same envelope shape
+   * as reads, so the decode path is shared.
+   * @param path - path below `/Platform`, e.g. `/Destiny2/Actions/Items/EquipItem/`.
+   * @param body - the action payload.
+   * @returns the envelope's `Response` body.
+   * @throws AuthUnavailableError when no usable token exists.
+   * @throws BungieApiError when upstream answers with a non-success envelope.
+   */
+  async post<T>(path: string, body: unknown): Promise<T> {
+    const token = await this.tokenProvider.getAccessToken()
+    const response = await this.fetchImpl(new URL(`${this.baseUrl}/Platform${path}`), {
+      method: 'POST',
+      headers: {
+        'X-API-Key': this.apiKey,
+        Authorization: `Bearer ${token.value}`,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    const text = await response.text()
+    let envelope: BungieEnvelope<T> | undefined
+    try {
+      envelope = JSON.parse(text) as BungieEnvelope<T>
+    } catch {
+      envelope = undefined
+    }
+    const code = envelope?.ErrorCode
+    if (!response.ok || envelope === undefined || typeof code !== 'number' || code !== 1) {
+      const detail = envelope?.Message || envelope?.ErrorStatus || text.slice(0, 200) || 'empty body'
+      throw new BungieApiError(
+        response.status,
+        code,
+        envelope?.ErrorStatus ?? '',
+        describeBungieError(code, response.status, detail),
+      )
+    }
+    return envelope.Response
+  }
 }

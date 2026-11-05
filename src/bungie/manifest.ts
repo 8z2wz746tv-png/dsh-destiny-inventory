@@ -12,7 +12,7 @@
  *    identity and write confirmations all key on it.
  */
 import { existsSync } from 'node:fs'
-import { hasCraftingSocket, parseOverlays, readStatValues } from './manifest-shapes'
+import { hasCraftingSocket, parseDamageTypes, parseOverlays, readStatValues } from './manifest-shapes'
 import { DatabaseSync } from 'node:sqlite'
 
 /** Why the definition database cannot answer right now. */
@@ -210,7 +210,7 @@ export class ManifestStore {
   private failure: ManifestFailure | undefined
   private counts: { itemCount: number; bucketCount: number } | undefined
   /** Localized damage-type names, keyed by `defaultDamageType` enum value. */
-  private readonly damageTypes = new Map<number, string>()
+  private readonly damageTypes = new Map<number, { name: string; icon: string }>()
 
   constructor(dbPath: string) {
     this.dbPath = dbPath
@@ -261,27 +261,29 @@ export class ManifestStore {
    * @returns the localized name, or an empty string when unknown or unavailable.
    */
   damageType(enumValue: number | null): string {
-    if (enumValue === null || this.db === null) return ''
+    return this.damageTypeInfo(enumValue).name
+  }
+
+  /** The game's own damage glyph; empty when the manifest carries none. */
+  damageTypeIcon(enumValue: number | null): string {
+    return this.damageTypeInfo(enumValue).icon
+  }
+
+  /** Both damage-type facts, read together so the table is walked once. */
+  private damageTypeInfo(enumValue: number | null): { name: string; icon: string } {
+    const empty = { name: '', icon: '' }
+    if (enumValue === null || this.db === null) return empty
     const cached = this.damageTypes.get(enumValue)
     if (cached !== undefined) return cached
-    let name = ''
     try {
       const rows = this.db.prepare('select json from DestinyDamageTypeDefinition').all() as {
         json: string
       }[]
-      for (const row of rows) {
-        const definition = JSON.parse(row.json) as Record<string, unknown>
-        const value = definition.enumValue
-        if (typeof value !== 'number') continue
-        const display = (definition.displayProperties ?? {}) as Record<string, unknown>
-        this.damageTypes.set(value, str(display.name))
-      }
-      name = this.damageTypes.get(enumValue) ?? ''
+      for (const [value, info] of parseDamageTypes(rows, ICON_ORIGIN)) this.damageTypes.set(value, info)
     } catch {
-      name = ''
+      return empty
     }
-    this.damageTypes.set(enumValue, name)
-    return name
+    return this.damageTypes.get(enumValue) ?? empty
   }
 
   /**

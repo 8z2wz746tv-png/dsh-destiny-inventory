@@ -31,6 +31,7 @@ const definitions: DefinitionLookup = {
   bucket: () => ({ name: '动能武器' }),
   plug: () => null,
   damageType: () => '动能',
+  damageTypeIcon: () => '',
   statOrder: () => [],
   statName: () => '',
 }
@@ -139,6 +140,7 @@ describe('classification', () => {
     bucket: () => null,
     plug: () => null,
     damageType: () => '',
+    damageTypeIcon: () => '',
     statOrder: () => [],
     statName: () => '',
   }

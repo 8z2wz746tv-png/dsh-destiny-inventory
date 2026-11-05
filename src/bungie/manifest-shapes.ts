@@ -65,3 +65,28 @@ export function parseOverlays(
       : [],
   }
 }
+
+/**
+ * Decode every damage-type definition into name + icon.
+ *
+ * The manifest keys these by `enumValue`, not by hash, so the whole table has to
+ * be walked once and cached under the enum.
+ * @param rows - raw `DestinyDamageTypeDefinition` rows.
+ * @param origin - bungie.net origin to prefix icon paths with.
+ * @returns name and absolute icon URL by enum value.
+ */
+export function parseDamageTypes(
+  rows: { json: string }[],
+  origin: string,
+): Map<number, { name: string; icon: string }> {
+  const out = new Map<number, { name: string; icon: string }>()
+  for (const row of rows) {
+    const definition = JSON.parse(row.json) as Record<string, unknown>
+    const value = definition.enumValue
+    if (typeof value !== 'number') continue
+    const display = (definition.displayProperties ?? {}) as Record<string, unknown>
+    const icon = typeof display.icon === 'string' ? `${origin}${display.icon}` : ''
+    out.set(value, { name: typeof display.name === 'string' ? display.name : '', icon })
+  }
+  return out
+}

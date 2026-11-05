@@ -11,7 +11,7 @@ import { NO_BAR, RECOIL_DIRECTION, statSortOrder } from './stat-order'
 import { toRarity } from './dto'
 import type { DefinitionLookup } from './dto'
 import type { ProfileItem } from '../bungie/profile'
-import type { ItemDetailView, PerkColumnView, PerkOptionView } from '../mcp/types'
+import type { ItemDetailView, PerkColumnView, PerkOptionView } from './types'
 
 /**
  * Socket categories that never earn a perk row.
@@ -193,6 +193,7 @@ export async function readItemDetail(
     location: item.location,
     rarity: toRarity(definition?.tierType ?? null),
     damageType: definitions.damageType(definition?.damageType ?? null),
+    damageIcon: definitions.damageTypeIcon(definition?.damageType ?? null),
     ammoType: ammo === null ? '' : (AMMO_NAME[ammo] ?? ''),
     weaponType: definition?.itemTypeDisplayName ?? '',
     frame: columns.find((column) => column.kind === 'frames')?.options[0]?.name ?? '',

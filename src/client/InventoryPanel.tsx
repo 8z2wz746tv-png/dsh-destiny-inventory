@@ -9,7 +9,7 @@ import type {
   ItemDetailView,
   ItemRow,
   PlayerProfileView,
-} from '../mcp/types'
+} from '../host/types'
 import { fetchCharacters, fetchInventory, postAction, prefetchItemDetail } from './api'
 import { ItemDetailCard } from './ItemDetail'
 import { DEFAULT_FILTERS, STORE_COLUMNS, availableTypes, buildSections, emptyShelfSections } from './filter'
@@ -27,6 +27,8 @@ interface ReceiptLine {
   ok: boolean
   text: string
   detail: string
+  /** Still in flight: shown immediately so a long move does not look dropped. */
+  pending?: boolean
 }
 
 
@@ -177,24 +179,38 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   const runAction = useCallback(
     async (request: ActionRequest, itemName: string, summary: string): Promise<ActionReceipt | null> => {
+      // Show the intent the moment it starts: the round trip takes seconds, and a
+      // silent wait reads as a dropped drag.
+      const pendingId = Date.now() + Math.random()
+      setReceipts((current) =>
+        [{ id: pendingId, ok: true, pending: true, text: summary, detail: '正在处理…' }, ...current].slice(0, 3),
+      )
       setBusy(true)
+      const settle = (ok: boolean, detail: string): void => {
+        setReceipts((current) =>
+          current.map((line) => (line.id === pendingId ? { ...line, ok, pending: false, detail } : line)),
+        )
+      }
       try {
         const receipt = await postAction(routePath, request, itemName, new AbortController().signal)
         if (!receipt.applied) {
-          pushReceipt(true, summary, receipt.message)
+          settle(true, receipt.message)
           return receipt
         }
-        pushReceipt(true, receipt.summary || summary, receipt.message)
+        settle(true, receipt.message)
+        setReceipts((current) =>
+          current.map((line) => (line.id === pendingId ? { ...line, text: receipt.summary || summary } : line)),
+        )
         load(new AbortController().signal, true)
         return receipt
       } catch (error) {
-        pushReceipt(false, summary, error instanceof Error ? error.message : String(error))
+        settle(false, error instanceof Error ? error.message : String(error))
         return null
       } finally {
         setBusy(false)
       }
     },
-    [routePath, load, pushReceipt],
+    [routePath, load],
   )
 
   const items = state.kind === 'ready' ? state.snapshot.items : []
@@ -323,11 +339,18 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       className={cls('dsh-destiny-cell', cell.flex && 'is-flex', dropTarget === cell.location && 'is-over')}
       data-shelf={shelf?.id}
       onDragOver={(event) => {
-        if (dragging === null) return
+        // Unconditional: dragover only fires during a drag, and gating this on
+        // React state (one render behind) silently rejected the first events —
+        // which is why only some cells looked droppable.
         event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
         setDropTarget(cell.location)
       }}
-      onDragLeave={() => setDropTarget(null)}
+      onDragLeave={(event) => {
+        // Fires for every child too; only clear when the pointer really left.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+        setDropTarget((current) => (current === cell.location ? null : current))
+      }}
       onDrop={(event) => onCellDrop(event, cell)}
     >
       {cell.equipped !== null && (
@@ -464,7 +487,13 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       {receipts.length > 0 && (
         <div className="dsh-destiny-receipts">
           {receipts.map((line) => (
-            <div key={line.id} className={cls('dsh-destiny-receipt', !line.ok && 'is-error')} title={line.detail}>
+            <div
+              key={line.id}
+              className={cls('dsh-destiny-receipt', !line.ok && 'is-error', line.pending && 'is-pending')}
+              title={line.detail}
+              role="status"
+              aria-busy={line.pending === true}
+            >
               <span className="dsh-destiny-receipt__text">{line.text}</span>
               <span className="dsh-destiny-receipt__detail">{line.detail}</span>
             </div>

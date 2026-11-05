@@ -9,7 +9,7 @@
  * keeps the hash as a visible marker (`#1234`), the bucket keeps `bucket:5678`,
  * and the caller is told how many rows were degraded.
  */
-import type { CharacterRow, EquippedState, ItemPlacement, ItemRow, ItemRarity } from '../mcp/types'
+import type { CharacterRow, EquippedState, ItemPlacement, ItemRow, ItemRarity } from './types'
 
 /** Bungie classType → the location key the frontend already uses. */
 export const CLASS_LOCATION: Record<number, string> = { 0: 'titan', 1: 'hunter', 2: 'warlock' }
@@ -55,43 +55,9 @@ export interface ItemSource {
 
 /** Whether component 205 answered for this snapshot. */
 /** Definition lookups, injected so this module stays free of the store class. */
-export interface DefinitionLookup {
-  /** Full Manifest item definition: the detail view needs more than the row does. */
-  item: (hash: number) => {
-    name: string
-    description: string
-    icon: string
-    itemType: number | null
-    itemTypeDisplayName: string
-    tierType: number | null
-    tierTypeName: string
-    /** Manifest `inventory.bucketTypeHash`: the classification bucket. */
-    bucketTypeHash: number | null
-    /** `defaultDamageType` enum value, resolved through `damageType`. */
-    damageType: number | null
-    /** `equippingBlock.ammoType`: 1 primary, 2 special, 3 heavy. */
-    ammoType: number | null
-    /** `stats.statGroupHash`: which ordered stat list applies. */
-    statGroupHash: number | null
-    /** Stat values by signed hash. */
-    stats: Record<number, { value: number; displayMaximum: number }>
-    /** Season watermark image path (relative to bungie.net). */
-    watermark: string
-    /** Champion counter: 0 none, 1 barrier, 2 overload, 3 unstoppable. */
-    breakerType: number
-    /** Definition owns a crafting socket. */
-    craftingSocket: boolean
-  } | null
-  bucket: (hash: number) => { name: string } | null
-  /** One perk/mod definition, or null when the hash is unknown. */
-  plug: (hash: number) => { name: string; description: string; icon: string; plugCategoryIdentifier: string } | null
-  /** Localized damage-type name for a `defaultDamageType` enum value. */
-  damageType: (enumValue: number | null) => string
-  /** Ordered stat hashes for one `statGroupHash`. */
-  statOrder: (hash: number | null) => number[]
-  /** Localized stat name for a signed stat hash. */
-  statName: (hash: number) => string
-}
+import type { DefinitionLookup } from '../bungie/lookup'
+
+export type { DefinitionLookup }
 
 /** Map `DestinyItemType` to the coarse kind the grid groups by. */
 export function toKind(itemType: number | null): ItemRow['kind'] {

@@ -1,4 +1,4 @@
-import type { ItemRow } from '../mcp/types'
+import type { ItemRow } from '../host/types'
 import { ALWAYS_SHOWN, BUCKET_SECTIONS, bucketRank, sectionOfBucket } from './buckets'
 
 /**

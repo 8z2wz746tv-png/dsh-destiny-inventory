@@ -8,9 +8,12 @@
 import { readFile } from 'node:fs/promises'
 import { BungieClient } from '../bungie/client'
 import { ITEM_DETAIL_COMPONENTS } from '../bungie/components'
+import { buildLookup } from '../bungie/lookup'
 import { ManifestStore } from '../bungie/manifest'
 import type { ManifestStatus } from '../bungie/manifest'
 import { pickPrimaryMembership, readMemberships } from '../bungie/memberships'
+import { runItemWrite } from './item-write'
+import type { ItemWrite } from '../bungie/write'
 import { readProfile } from '../bungie/profile'
 import type { DestinyMembership } from '../bungie/memberships'
 import type { ProfileSnapshot } from '../bungie/profile'
@@ -18,7 +21,7 @@ import { FileTokenProvider } from '../bungie/token-file-provider'
 import { AuthUnavailableError } from '../bungie/types'
 import { CLASS_LOCATION, toCharacterRow, toItemRows } from './dto'
 import type { CharacterSource, DefinitionLookup, ItemSource } from './dto'
-import type { InventorySnapshot, PlayerProfileView } from '../mcp/types'
+import type { InventorySnapshot, PlayerProfileView } from './types'
 
 /** Default class names until a localized definition supplies one. */
 const CLASS_NAME: Record<number, string> = { 0: '泰坦', 1: '猎人', 2: '术士' }
@@ -146,15 +149,7 @@ export class BungieService {
 
   /** Definition lookups bound to the current manifest. */
   private definitions(): DefinitionLookup {
-    const store = this.store()
-    return {
-      item: (hash) => store.item(hash),
-      bucket: (hash) => store.bucket(hash),
-      plug: (hash) => store.plug(hash),
-      damageType: (enumValue) => store.damageType(enumValue),
-      statOrder: (hash) => store.statOrder(hash),
-      statName: (hash) => store.statName(hash),
-    }
+    return buildLookup(this.store())
   }
 
   /** Character header for the panel. */
@@ -208,11 +203,8 @@ export class BungieService {
   }
 
   /**
-   * Snapshot plus definitions, for the detail view.
-   *
-   * The detail needs raw sockets and Manifest plug definitions, which the wire
-   * `ItemRow` deliberately drops; exposing them here keeps that knowledge in the
-   * data plane instead of leaking component ids into the client.
+   * Snapshot plus definitions, for the detail view: that view needs raw sockets
+   * and Manifest plug definitions, which the wire `ItemRow` deliberately drops.
    * @param options - `force` bypasses the snapshot cache.
    */
   async detailSource(options: { force?: boolean } = {}): Promise<{
@@ -234,14 +226,34 @@ export class BungieService {
     return { snapshot, definitions: this.definitions() }
   }
 
-  /**
-   * The game's own badge artwork, fetched once per process.
-   *
-   * The client draws tiles from these URLs instead of inventing shapes.
-   */
+  /** The game's own badge artwork; the client paints tiles from these URLs. */
   overlays(): { crafted: string; craftedBackground: string; tiers: string[] } {
     if (this.overlayCache === null) this.overlayCache = this.store().iconOverlays()
     return this.overlayCache
+  }
+
+  /**
+   * Run one item action straight against Bungie.
+   *
+   * Deliberately not routed through the MCP: that path added a host → MCP process
+   * → Bungie round trip to every drag.
+   * @param write - what to do.
+   * @returns a human summary of what was asked.
+   */
+  async write(write: ItemWrite): Promise<string> {
+    const membership = await this.currentMembership()
+    return runItemWrite(
+      {
+        client: await this.platform(),
+        target: {
+          membershipType: membership.membershipType,
+          membershipId: membership.membershipId,
+        },
+        snapshot: () => this.currentSnapshot(),
+        invalidate: () => this.invalidate(),
+      },
+      write,
+    )
   }
 
   /**

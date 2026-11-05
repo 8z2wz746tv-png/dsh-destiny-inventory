@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ItemRow } from '../src/mcp/types'
+import type { ItemRow } from '../src/host/types'
 import type { SortKey } from '../src/client/filter'
 import {
   DEFAULT_FILTERS,

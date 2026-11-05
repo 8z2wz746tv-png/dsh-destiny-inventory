@@ -176,6 +176,8 @@ export interface ItemDetailView {
   /** Weapon/armor definition facts; empty when the manifest could not supply them. */
   rarity: string
   damageType: string
+  /** Absolute icon URL for the damage type (the game's own glyph). */
+  damageIcon: string
   ammoType: string
   weaponType: string
   frame: string

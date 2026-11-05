@@ -100,7 +100,7 @@ export function InventoryToolbar({
       </button>
       <span className="dsh-destiny-toolbar__count">{countLabel}</span>
       <span className="dsh-destiny-build" title="当前加载的插件版本">
-        v0.30.1
+        v0.33.1
       </span>
     </div>
   )

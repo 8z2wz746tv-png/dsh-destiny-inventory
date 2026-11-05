@@ -12,7 +12,7 @@
  * a colour.
  */
 
-import { BUILD_STAMP_CSS, DETAIL_LAYOUT_CSS, DETAIL_VARS, HOVER_CARD_CSS, ENHANCED_ARROW_CSS, HOVER_SIZE_CSS, KILL_TRACKER_CSS, PERK_COLUMNS_CSS, RECOIL_CSS, TILE_BADGES_CSS } from './styles-detail'
+import { BUILD_STAMP_CSS, DETAIL_LAYOUT_CSS, DETAIL_VARS, HOVER_CARD_CSS, ENHANCED_ARROW_CSS, GLYPH_CSS, HOVER_SIZE_CSS, KILL_TRACKER_CSS, PERK_COLUMNS_CSS, RECOIL_CSS, TILE_BADGES_CSS } from './styles-detail'
 
 import { STORE_CARD_CSS } from './styles-store'
 
@@ -112,7 +112,9 @@ const CSS = `
      CSS (max-content is not a length) and the whole declaration collapsed the
      row into one column. */
   display: flex;
-  align-items: flex-start;
+  /* Stretch, not flex-start: every column in a bucket row shares the tallest
+     one's height, so the blank area under a short column is still droppable. */
+  align-items: stretch;
   /* Wide enough that four stores read as four columns, not one long shelf. */
   gap: 28px;
   /* Exactly the container's width: the vault cell absorbs what the three
@@ -138,6 +140,11 @@ const CSS = `
   min-inline-size: var(--dsh-item-size);
   min-block-size: calc(var(--dsh-item-size) + 4px);
   border-radius: 8px;
+  /* Stretch to the row's height so the blank space below a short column is still
+     a drop target — DIM accepts a drag anywhere in the store column, not just on
+     a tile. */
+  align-self: stretch;
+  overflow: hidden;
 }
 .dsh-destiny-cell__worn {
   /* The worn item keeps its own block, divided from the carried grid. */
@@ -185,7 +192,14 @@ const CSS = `
   max-inline-size: none;
   min-inline-size: 0;
 }
-.dsh-destiny-cell.is-over { outline: 2px dashed var(--dsw-alias-brand-primary); outline-offset: 2px; background: var(--dsw-alias-interactive-bg-hover); }
+/* Whole cell lights up while it is the drop target, matching DIM: the entire
+   store column accepts a dragged item, not just the tiles inside it. */
+.dsh-destiny-cell.is-over {
+  outline: 2px dashed var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 6px;
+}
 
 .dsh-destiny-skeleton { display: flex; flex-direction: column; gap: 6px; padding-block: 8px; }
 .dsh-destiny-skeleton__row { display: flex; gap: 4px; }
@@ -360,7 +374,54 @@ export function ensureStyles(): () => void {
   if (existing !== null) return () => undefined
   const element = document.createElement('style')
   element.id = STYLE_ID
-  element.textContent = DETAIL_VARS + CSS + STORE_CARD_CSS + DETAIL_LAYOUT_CSS + HOVER_CARD_CSS + BUILD_STAMP_CSS + TILE_BADGES_CSS + PERK_COLUMNS_CSS + HOVER_SIZE_CSS + RECOIL_CSS + KILL_TRACKER_CSS + ENHANCED_ARROW_CSS + LEGACY_THEME
+  element.textContent = DETAIL_VARS + CSS + RECEIPT_CSS + STORE_CARD_CSS + DETAIL_LAYOUT_CSS + HOVER_CARD_CSS + BUILD_STAMP_CSS + TILE_BADGES_CSS + PERK_COLUMNS_CSS + HOVER_SIZE_CSS + RECOIL_CSS + KILL_TRACKER_CSS + ENHANCED_ARROW_CSS + GLYPH_CSS + LEGACY_THEME
   document.head.appendChild(element)
   return () => element.remove()
 }
+
+/** Receipts: one line per action, with an in-flight state and a spinner. */
+export const RECEIPT_CSS = `
+.dsh-destiny-receipts {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-inline-size: 320px;
+  pointer-events: none;
+}
+.dsh-destiny-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 9px;
+  border-radius: 5px;
+  background: rgba(24, 27, 32, .96);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-inline-start: 3px solid #6ac07a;
+  font-size: 11px;
+  line-height: 1.3;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
+}
+.dsh-destiny-receipt.is-error { border-inline-start-color: #d9534f; }
+.dsh-destiny-receipt__text { color: var(--dsw-alias-label-primary); }
+.dsh-destiny-receipt__detail { color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+/* In flight: a moving stripe reads as progress without inventing a percentage. */
+.dsh-destiny-receipt.is-pending { border-inline-start-color: #4c8dff; }
+.dsh-destiny-receipt.is-pending::after {
+  content: "";
+  block-size: 2px;
+  margin-block-start: 3px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, #4c8dff, transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: dsh-receipt-run 1s linear infinite;
+}
+@keyframes dsh-receipt-run {
+  from { background-position: -50% 0; }
+  to { background-position: 150% 0; }
+}
+`

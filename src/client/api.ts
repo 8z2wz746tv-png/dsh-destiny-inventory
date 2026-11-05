@@ -5,7 +5,7 @@ import type {
   InventorySnapshot,
   ItemDetailView,
   PlayerProfileView,
-} from '../mcp/types'
+} from '../host/types'
 
 /**
  * Browser-half client for the plugin's own bridge route.
@@ -99,10 +99,17 @@ export function fetchItemDetail(
  */
 const detailCache = new Map<string, Promise<ItemDetailView>>()
 
+/**
+ * Details already delivered.
+ *
+ * The promise cache still costs a render — the card has to await it, so it paints
+ * "reading…" for a frame even on a hit. Keeping the resolved value lets the first
+ * render show content directly.
+ */
+const delivered = new Map<string, ItemDetailView>()
+
 /** Cache key: the route scopes the cache to one bridge. */
-function cacheKey(routePath: string, id: string): string {
-  return `${routePath}|${id}`
-}
+const cacheKey = (routePath: string, id: string): string => `${routePath}|${id}`
 
 /**
  * Detail with memoisation: the first caller fetches, everyone after joins it.
@@ -118,11 +125,16 @@ export function readItemDetailCached(
   const key = cacheKey(routePath, id)
   const cached = detailCache.get(key)
   if (cached !== undefined) return cached
-  const pending = fetchItemDetail(routePath, id, signal).catch((error: unknown) => {
-    // A failed or cancelled read must not poison the cache.
-    detailCache.delete(key)
-    throw error
-  })
+  const pending = fetchItemDetail(routePath, id, signal)
+    .then((detail) => {
+      delivered.set(key, detail)
+      return detail
+    })
+    .catch((error: unknown) => {
+      // A failed or cancelled read must not poison the cache.
+      detailCache.delete(key)
+      throw error
+    })
   detailCache.set(key, pending)
   return pending
 }
@@ -138,10 +150,15 @@ export function readItemDetailCached(
 export function prefetchItemDetail(routePath: string, id: string): void {
   const key = cacheKey(routePath, id)
   if (detailCache.has(key)) return
-  const pending = fetchItemDetail(routePath, id, new AbortController().signal).catch(() => {
-    detailCache.delete(key)
-    return undefined as unknown as ItemDetailView
-  })
+  const pending = fetchItemDetail(routePath, id, new AbortController().signal)
+    .then((detail) => {
+      delivered.set(key, detail)
+      return detail
+    })
+    .catch(() => {
+      detailCache.delete(key)
+      return undefined as unknown as ItemDetailView
+    })
   detailCache.set(key, pending)
 }
 
@@ -170,4 +187,14 @@ export async function postAction(
     throw new BridgeError(body.error.code, body.error.message)
   }
   return body.data
+}
+
+/**
+ * A detail already in hand, without awaiting anything.
+ * @param routePath - bridge base pathname.
+ * @param id - snapshot row id.
+ * @returns the detail, or `null` when it still has to be fetched.
+ */
+export function peekItemDetail(routePath: string, id: string): ItemDetailView | null {
+  return delivered.get(cacheKey(routePath, id)) ?? null
 }

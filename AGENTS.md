@@ -14,6 +14,33 @@
 | **不许静默降级** | 205 组件缺失时如果读成"未装备"，1500 件物品的装备状态全错且看不出来 | `equipped` 三态 + `tests/bungie-dto.test.ts` |
 | **不许做兼容层** | 旧形状留双写会把"回到上一版"这件事变成不可能 | `no dead paths` 守门 |
 
+## 0.5 借来的通用条款
+
+两组外部规范，只保留本项目**没有**或**写得不够硬**的部分。
+
+### 来自 `andrej-karpathy-skills`（通用 LLM 编码习惯）
+
+| 规矩 | 落地方式 |
+|---|---|
+| **先想再写**：把假设说出来，有多种解释就摆出来，别静默挑一个 | 大改动先出计划（§7 已要求）；不确定就停下来问，不要猜着写完再问 |
+| **简单优先**：只写解决问题的最小代码，不做没人要的抽象与配置项 | 没有第二个调用方的抽象算 bug；"将来可能要"不算理由 |
+| **外科手术式改动**：只碰必须碰的，不顺手"改进"相邻代码 | 与 §4「旧实现整段删掉」不冲突：删旧是**任务本身**，顺手重排别人的代码不是 |
+| **目标可验证**：把任务写成"可判定的成功条件"，再循环到达成 | 每条守门测试都要**注入违规确认变红**（§5 已要求），否则不知道它会不会咬人 |
+
+**自查句**：diff 里每一行都能追溯到这次请求；如果有一行是"顺便"，删掉它。
+
+### 来自 `destiny2-mcp`（同作者的命运 2 工具链，踩坑更早）
+
+| 规矩 | 我们这里缺什么 |
+|---|---|
+| **不许替调用方下结论**：没算过的事不说；"没探成"记 `null` + reason，不记成 `false` | 我们有 `equipped` 三态，但**没有一条通则**——写入失败、插槽读空、Manifest 缺表都可能被静默当成"没有" |
+| **失败必须是失败**：`ok=false` + 稳定错误码 + 中文说明"缺什么/下一步"；裸抛算 bug | 现在 `toFailure(error)` 直接透传上游文案 |
+| **数据分三档不许混**：Manifest 定义 / 你的账号 / 社区资料（不可信，带来源与时间） | 加来源标注前，社区数据一律不进来（§0 的对齐口径） |
+| **不让可选数据弄坏主结果**：坏的可选资料要带 `warnings` | 现在的降级（Manifest 缺表）是无声的 |
+| **依赖只能向下 + 体量 ratchet**：超限先抽代码，上限只许下调 | 已有（§1 与 `architecture.test.ts`），但**单向依赖还没有守门** |
+| **改响应形状：旧键一个不留** | 已有（§0） |
+| **CI 跑 linter**（抓未定义 name / 未用 import，比测试更早） | 现在只有 `tsc --noEmit`，没有 lint |
+
 ## 1. 这个项目的分层
 
 ```
@@ -29,15 +56,19 @@ src/host/      组合层：把 bungie 的输出转成 DTO，注册 HTTP 路由�
                ├ item-detail.ts     详情卡组装（插槽候选、属性行、击杀数）
                ├ stat-order.ts      DIM 的属性白名单与顺序（照搬 itemStatAllowList）
                └ enhanced-perks.ts  强化 perk 映射（照搬 trait-to-enhanced-trait.json）
-src/mcp/       与 destiny MCP 的接口契约；只服务 agent，前端不走这里
-               ├ types.ts     线格式契约（ItemRow / ItemDetailView …）
+src/mcp/       只服务 agent：工具调用与信封解析，前端不走这里
                ├ client.ts    工具调用（命名空间、错误分类）
-               ├ envelope.ts  工具信封解析（写入链路在用）
-               └ actions.ts   写入封装（**仍由 /action 使用，待迁到自有写链路**）
+               └ envelope.ts  工具信封解析
+src/host/types.ts  线格式契约（ItemRow / ItemDetailView / CharacterRow …）
 src/client/    浏览器侧：面板、筛选、样式
 ```
 
-依赖只能向下：`client → mcp → host → bungie`。反向引用一律判红。
+依赖只能向下：`client → mcp → host → bungie`。反向引用一律判红（`tests/architecture.test.ts` 的
+`dependency direction`，会扫出每一处向上 import）。
+
+线格式契约（`ItemRow` / `ItemDetailView` / `CharacterRow`）住在 `src/host/types.ts`：它们由 host
+层生产，client 层消费，**不属于** `mcp/`。`mcp/` 只剩 agent 通道（工具调用与信封解析），
+不依赖任何一层。
 
 **唯一的跨层例外**：`client/filter.ts` 从 `buckets.ts` 取分类表，因为那是纯数据。
 

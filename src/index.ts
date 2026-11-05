@@ -6,11 +6,11 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
-import { runAction } from './mcp/actions'
 import { readItemDetail } from './host/item-detail'
 import { AuthUnavailableError } from './bungie/types'
 import { BungieService } from './host/bungie-service'
-import type { ActionRequest, BridgeResponse } from './mcp/types'
+import { toItemWrite } from './bungie/write'
+import type { ActionRequest, BridgeResponse } from './host/types'
 
 export const name = 'dsh-destiny-inventory'
 
@@ -101,17 +101,12 @@ export function apply(ctx: Context, config: ConfigShape): void {
             })
             return
           }
-          const receipt = await runAction(
-            ctx,
-            config.mcpServer,
-            body.request,
-            body.itemName ?? '',
-          )
-          if (receipt.applied) {
-            // A write moves the account on; the snapshot cache now describes the past.
-            service.invalidate()
-          }
-          sendJson(res, 200, { ok: true, data: receipt } satisfies BridgeResponse<unknown>)
+          // Straight to Bungie: the MCP hop added seconds to every drag.
+          const summary = await service.write(toItemWrite(body.request))
+          sendJson(res, 200, {
+            ok: true,
+            data: { applied: true, summary, message: summary },
+          } satisfies BridgeResponse<unknown>)
         } catch (error) {
           sendJson(res, 502, { ok: false, error: toFailure(error) } satisfies BridgeResponse<never>)
         }

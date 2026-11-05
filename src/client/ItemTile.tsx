@@ -7,7 +7,7 @@
  */
 import type { ReactElement } from 'react'
 import type { DragEvent } from 'react'
-import type { ItemRow } from '../mcp/types'
+import type { ItemRow } from '../host/types'
 
 /** Join class names, dropping falsy entries. */
 function cls(...names: (string | false | null | undefined)[]): string {

@@ -39,6 +39,8 @@ describe('module size', () => {
     // The rest were unregistered, so they could grow unnoticed. Each ceiling sits
     // just above today's count: a split, not a bigger number, is the answer.
     'src/client/ItemDetail.tsx': 280,
+    'src/client/RecoilGauge.tsx': 60,
+    'src/client/ammo-icons.ts': 40,
     'src/client/styles-detail.ts': 430,
     'src/client/styles-store.ts': 130,
     'src/client/api.ts': 200,
@@ -49,7 +51,9 @@ describe('module size', () => {
     'src/host/item-detail.ts': 260,
     'src/host/stat-order.ts': 90,
     'src/host/enhanced-perks.ts': 470,
-    'src/mcp/actions.ts': 220,
+    'src/bungie/write.ts': 210,
+    'src/host/item-write.ts': 120,
+    'src/client/receipts.ts': 40,
     'src/mcp/envelope.ts': 80,
     'src/mcp/client.ts': 110,
     'src/mcp/types.ts': 260,
@@ -79,10 +83,38 @@ describe('retired paths stay retired', () => {
     expect(resurrected).toEqual([])
   })
 
-  it('invalidates the live snapshot after a write instead of a stale cache', () => {
+  it('writes through our own plane instead of the MCP tool', () => {
     const index = readFileSync(join(SRC, 'index.ts'), 'utf8')
-    expect(index).toContain('service.invalidate()')
-    expect(index).not.toContain('clearInventoryCache')
+    // PLAN §1: the front end owns its writes. Routing them through the MCP added
+    // a host → MCP process → Bungie hop to every drag.
+    expect(index).toContain('service.write(')
+    expect(index).not.toContain('runAction')
+  })
+
+  it('invalidates the live snapshot after a write', () => {
+    const write = readFileSync(join(SRC, 'host/item-write.ts'), 'utf8')
+    expect(write).toContain('deps.invalidate()')
+    expect(readFileSync(join(SRC, 'index.ts'), 'utf8')).not.toContain('clearInventoryCache')
+  })
+})
+
+describe('dependency direction', () => {
+  /** A layer may only import from the layers below it. */
+  const LAYER: Record<string, number> = { client: 3, mcp: 2, host: 1, bungie: 0 }
+
+  it('never imports upward', () => {
+    const offenders: string[] = []
+    for (const path of sources()) {
+      const name = relative(join(process.cwd(), 'src'), path).split('/')[0] ?? ''
+      const from = LAYER[name]
+      if (from === undefined) continue
+      const body = readFileSync(path, 'utf8')
+      for (const match of body.matchAll(/from '\.\.?\/([a-z-]+)\//g)) {
+        const to = LAYER[match[1] ?? '']
+        if (to !== undefined && to > from) offenders.push(`${relative(process.cwd(), path)} → ${match[1]}`)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 })
 
