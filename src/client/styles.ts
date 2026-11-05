@@ -327,6 +327,15 @@ const CSS = `
 
 /* After the rarity rules on purpose: same specificity, so a gold ring only wins
    if it is declared later. */
+/* A write in flight: the grid already moved, this says "not confirmed yet".
+   A failed write keeps the ring until a read-back says where it really is. */
+.dsh-destiny-tile.is-applying { opacity: .62; }
+.dsh-destiny-tile.is-unconfirmed {
+  opacity: .62;
+  outline: 2px dashed var(--dsw-alias-label-tertiary);
+  outline-offset: -2px;
+}
+
 .dsh-destiny-tile.is-masterwork {
   border-color: #e9d071;
   box-shadow: inset 0 0 0 2px #e9d071, 0 0 6px rgba(233, 208, 113, .45);

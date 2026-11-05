@@ -111,6 +111,14 @@ export interface ItemRow {
   gearTier: number
   /** Forged at the Relic: DIM marks these with a red corner badge. */
   crafted: boolean
+  /**
+   * A write is in flight, or the last one failed and the truth is unknown.
+   *
+   * View state only: the real location is always whatever Bungie says. The panel
+   * uses it to draw a pending ring rather than pretending the move either happened
+   * or did not.
+   */
+  pending?: 'applying' | 'unconfirmed'
   /** Masterworked: DIM paints the whole tile gold. */
   masterwork: boolean
   /** Season watermark image (the icon's top-left corner). */

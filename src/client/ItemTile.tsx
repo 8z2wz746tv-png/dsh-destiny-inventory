@@ -53,6 +53,7 @@ export function ItemTile({
         'r-' + item.rarity,
         item.masterwork && 'is-masterwork',
         compact && 'is-compact',
+        item.pending !== undefined && 'is-' + item.pending,
       )}
       title={tooltip}
       data-locked={item.locked ? '1' : '0'}

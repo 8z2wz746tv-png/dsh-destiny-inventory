@@ -14,7 +14,8 @@ import { fetchCharacters, fetchInventory, postAction, warmDetails } from './api'
 import { ItemDetailCard } from './ItemDetail'
 import { DEFAULT_FILTERS, availableTypes, buildSections, emptyShelfSections } from './filter'
 import { InventoryToolbar } from './InventoryToolbar'
-import { applyLock, applyMove } from './apply-move'
+import { applyLock, applyMove, settleMove } from './apply-move'
+import { settleByReadBack } from './settle-by-readback'
 import { Receipts } from './Receipts'
 import { useReceipts } from './use-receipts'
 import { CellSegments } from './CellSegments'
@@ -166,6 +167,15 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     return () => observer.disconnect()
   }, [])
 
+  /** Rewrite the rows in place, leaving the rest of the snapshot alone. */
+  const patchRows = useCallback((change: (rows: ItemRow[]) => ItemRow[]) => {
+    setState((current) =>
+      current.kind === 'ready'
+        ? { ...current, snapshot: { ...current.snapshot, items: change(current.snapshot.items) } }
+        : current,
+    )
+  }, [])
+
   const pushReceipt = useCallback(
     (ok: boolean, text: string, detail: string): void => {
       receipts.begin(text).settle(ok, detail)
@@ -186,25 +196,20 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       const line = receipts.begin(summary, itemIcon, () => controller.abort())
       setBusy(true)
       try {
+        // The grid already moved on drop, so nothing to apply here; just clear the
+        // pending hint — the optimistic position turned out to be right.
+        if (request.kind === 'move') patchRows((rows) => settleMove(rows, request.instanceId, undefined))
         const receipt = await postAction(routePath, request, itemName, controller.signal)
         line.settle(true, receipt.message)
         if (!receipt.applied) return receipt
         if (receipt.summary !== '') line.rename(receipt.summary)
-        // Apply the change locally, the way DIM's `itemMoved` does. A refetch left
-        // the item visibly where it started for several seconds.
-        setState((current) => {
-          if (current.kind !== 'ready') return current
-          const items =
-            request.kind === 'move'
-              ? applyMove(current.snapshot.items, request.instanceId, request.destination ?? 'vault')
-              : request.kind === 'lock'
-                ? applyLock(current.snapshot.items, request.instanceId, request.locked === true)
-                : current.snapshot.items
-          return { ...current, snapshot: { ...current.snapshot, items } }
-        })
+        if (request.kind === 'lock') patchRows((rows) => applyLock(rows, request.instanceId, request.locked === true))
         return receipt
       } catch (error) {
         line.settle(false, error instanceof Error ? error.message : String(error))
+        // A failed response does not mean the write did not land. Mark the item
+        // unknown and ask Bungie, rather than rolling back to a stale snapshot.
+        if (request.kind === 'move') await settleByReadBack(routePath, request.instanceId, patchRows)
         return null
       } finally {
         setBusy(false)
@@ -274,6 +279,9 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const move = (item: ItemRow, destination: string): void => {
     if (item.locationKey === destination) return
     const label = DESTINATION_LABEL[destination] ?? destination
+    // Optimistic: the grid moves on drop, then the request goes out. Waiting for
+    // the round trip left the item visibly where it started for hundreds of ms.
+    patchRows((rows) => applyMove(rows, item.instanceId, destination))
     void runAction(
       { kind: 'move', instanceId: item.instanceId, destination },
       item.name,

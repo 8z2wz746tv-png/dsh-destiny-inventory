@@ -14,6 +14,7 @@ import type { ManifestStatus } from '../bungie/manifest'
 import { pickPrimaryMembership, readMemberships } from '../bungie/memberships'
 import type { DestinyMembership } from '../bungie/memberships'
 import { readAllDetails } from './details-bulk'
+import { resolveItemState } from './item-state-route'
 import { runItemWrite } from './item-write'
 import type { ItemWrite } from '../bungie/write'
 import { readProfile } from '../bungie/profile'
@@ -226,6 +227,11 @@ export class BungieService {
     return { snapshot, definitions: this.definitions() }
   }
 
+  /** Where one item is right now; `null` when it is gone. */
+  async itemState(instanceId: string) {
+    return resolveItemState(await this.platform(), await this.currentMembership(), await this.currentSnapshot(), instanceId)
+  }
+
   /** Every detail in one payload; the client warms its cache in one request. */
   async details(options: { force?: boolean } = {}): Promise<Record<string, ItemDetailView>> {
     return readAllDetails(this, options)
@@ -291,7 +297,6 @@ export class BungieService {
     }
   }
 
-  /** Release the manifest handle. */
   close(): void {
     this.manifest?.close()
     this.manifest = null

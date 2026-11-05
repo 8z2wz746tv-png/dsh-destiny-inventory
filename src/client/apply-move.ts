@@ -27,6 +27,62 @@ export function applyMove(rows: ItemRow[], instanceId: string, destination: stri
       characterId: toVault ? null : destination,
       // Moving never leaves an item equipped on the character it left.
       equipped: 'not_equipped',
+      pending: 'applying',
+    }
+  })
+}
+
+/**
+ * Clear a write's pending hint.
+ *
+ * Called on success (the optimistic position was right) and after a read-back
+ * (the position is whatever Bungie reported).
+ * @param rows - the current rows.
+ * @param instanceId - which item settled.
+ * @param state - `'applying'` to mark in-flight, `undefined` to settle.
+ * @returns the rows with the hint applied.
+ */
+export function settleMove(
+  rows: ItemRow[],
+  instanceId: string,
+  state: 'applying' | 'unconfirmed' | undefined,
+): ItemRow[] {
+  return rows.map((row) => (row.instanceId === instanceId ? { ...row, pending: state } : row))
+}
+
+/**
+ * Write back the location Bungie reported after a failed move.
+ *
+ * A failed response does not mean the write did not land, so the panel asks about
+ * that one item and takes the answer — no guessing, no rolling back to a snapshot
+ * that may already be stale.
+ * @param rows - the current rows.
+ * @param instanceId - which item.
+ * @param destination - `vault` or a character location key.
+ * @param equipped - whether Bungie says it is worn.
+ * @returns the rows with the confirmed position.
+ */
+export function confirmMove(
+  rows: ItemRow[],
+  instanceId: string,
+  destination: string,
+  equipped: boolean,
+): ItemRow[] {
+  return rows.map((row) => {
+    if (row.instanceId !== instanceId) return row
+    const toVault = destination === 'vault'
+    return {
+      ...row,
+      locationKey: destination,
+      location: destination,
+      placement: toVault
+        ? { kind: 'vault' }
+        : equipped
+          ? { kind: 'equipped', characterId: destination, slotHash: row.placement.kind === 'equipped' ? row.placement.slotHash : 0 }
+          : { kind: 'inventory', characterId: destination },
+      characterId: toVault ? null : destination,
+      equipped: equipped ? 'equipped' : 'not_equipped',
+      pending: undefined,
     }
   })
 }
@@ -40,4 +96,14 @@ export function applyMove(rows: ItemRow[], instanceId: string, destination: stri
  */
 export function applyLock(rows: ItemRow[], instanceId: string, locked: boolean): ItemRow[] {
   return rows.map((row) => (row.instanceId === instanceId ? { ...row, locked } : row))
+}
+
+/**
+ * Rewrite rows in place, leaving the rest of the snapshot alone.
+ * @param rows - the current rows.
+ * @param change - how to change them.
+ * @returns the changed rows.
+ */
+export function patchRows(rows: ItemRow[], change: (rows: ItemRow[]) => ItemRow[]): ItemRow[] {
+  return change(rows)
 }

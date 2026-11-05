@@ -156,6 +156,19 @@ export function apply(ctx: Context, config: ConfigShape): void {
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }
+        if (query === '/item-state') {
+          const id = url.searchParams.get('id') ?? ''
+          if (id === '') {
+            sendJson(res, 400, {
+              ok: false,
+              error: { code: 'BadRequest', message: 'need ?id=<instanceId>' },
+            })
+            return
+          }
+          const data = await service.itemState(id)
+          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
+          return
+        }
         if (query === '/details') {
           const data = await service.details({ force: url.searchParams.get('refresh') === '1' })
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)

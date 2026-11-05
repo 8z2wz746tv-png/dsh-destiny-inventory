@@ -37,7 +37,7 @@ export const STALE_HOST_MESSAGE =
   '只关窗口不够，插件的宿主半侧只在启动时加载一次。'
 
 /** One bridge read: fetch, unwrap the envelope, fail with a typed error. */
-async function readBridge<T>(url: string, signal: AbortSignal): Promise<T> {
+export async function readBridge<T>(url: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal, headers: { accept: 'application/json' } })
   const body = (await response.json()) as BridgeResponse<T>
   if (body.ok !== true) {
