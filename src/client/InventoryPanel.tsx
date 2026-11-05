@@ -2,20 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHoverCard } from './use-hover-card'
 import type { DragEvent, ReactElement } from 'react'
 import type {
-  ActionReceipt,
-  ActionRequest,
   CharacterRow,
   InventorySnapshot,
-  ItemDetailView,
   ItemRow,
   PlayerProfileView,
 } from '../host/types'
-import { fetchCharacters, fetchInventory, postAction, warmDetails } from './api'
+import { fetchCharacters, fetchInventory, warmDetails } from './api'
 import { ItemDetailCard } from './ItemDetail'
 import { DEFAULT_FILTERS, availableTypes, buildSections, emptyShelfSections } from './filter'
 import { InventoryToolbar } from './InventoryToolbar'
-import { applyLock, applyMove, settleMove } from './apply-move'
-import { settleByReadBack } from './settle-by-readback'
+import { useItemActions } from './use-item-actions'
 import { Receipts } from './Receipts'
 import { useViewReport } from './use-view-report'
 import { viewOf } from './view-reporter'
@@ -35,10 +31,6 @@ type LoadState =
 
 const CLASS_LOCATION: Record<number, string> = { 0: 'titan', 1: 'hunter', 2: 'warlock' }
 const BUNGIE_ORIGIN = 'https://www.bungie.net'
-
-function isCharacter(location: string): boolean {
-  return location === 'hunter' || location === 'warlock' || location === 'titan'
-}
 
 /** Join class names, dropping the falsy ones. */
 function cls(...parts: (string | false | undefined)[]): string {
@@ -102,17 +94,12 @@ function StoreCard({
   )
 }
 
-/** Where a move is going, in the words the receipt should use. */
-const DESTINATION_LABEL: Record<string, string> = { vault: '仓库', hunter: '猎人', warlock: '术士', titan: '泰坦' }
-
 export function InventoryPanel({ routePath }: { routePath: string }): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [filters, setFilters] = useState<InventoryFilters>(DEFAULT_FILTERS)
   const hoverCard = useHoverCard()
   const overlays = state.kind === 'ready' ? state.snapshot.overlays : undefined
   const receipts = useReceipts()
-  const [pendingEquip, setPendingEquip] = useState<{ detail: ItemDetailView; summary: string } | null>(null)
-  const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState<ItemRow | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   /** Width class of the panel: a side panel is not a full-screen DIM. */
@@ -178,47 +165,14 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     )
   }, [])
 
-  const pushReceipt = useCallback(
-    (ok: boolean, text: string, detail: string): void => {
-      receipts.begin(text).settle(ok, detail)
-    },
-    [receipts],
-  )
-
-  const runAction = useCallback(
-    async (
-      request: ActionRequest,
-      itemName: string,
-      summary: string,
-      itemIcon?: string,
-    ): Promise<ActionReceipt | null> => {
-      // Show the intent the moment it starts: the round trip takes seconds, and a
-      // silent wait reads as a dropped drag.
-      const controller = new AbortController()
-      const line = receipts.begin(summary, itemIcon, () => controller.abort())
-      setBusy(true)
-      try {
-        // The grid already moved on drop, so nothing to apply here; just clear the
-        // pending hint — the optimistic position turned out to be right.
-        if (request.kind === 'move') patchRows((rows) => settleMove(rows, request.instanceId, undefined))
-        const receipt = await postAction(routePath, request, itemName, controller.signal)
-        line.settle(true, receipt.message)
-        if (!receipt.applied) return receipt
-        if (receipt.summary !== '') line.rename(receipt.summary)
-        if (request.kind === 'lock') patchRows((rows) => applyLock(rows, request.instanceId, request.locked === true))
-        return receipt
-      } catch (error) {
-        line.settle(false, error instanceof Error ? error.message : String(error))
-        // A failed response does not mean the write did not land. Mark the item
-        // unknown and ask Bungie, rather than rolling back to a stale snapshot.
-        if (request.kind === 'move') await settleByReadBack(routePath, request.instanceId, patchRows)
-        return null
-      } finally {
-        setBusy(false)
-      }
-    },
-    [routePath, load],
-  )
+  // Every account write goes through one queue; the panel only paints what it
+  // reports back.
+  const actions = useItemActions({
+    routePath,
+    receipts,
+    patchRows,
+    closeCard: hoverCard.close,
+  })
 
   const items = state.kind === 'ready' ? state.snapshot.items : []
   const profile = state.kind === 'ready' ? state.profile : undefined
@@ -283,20 +237,6 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   const patch = (next: Partial<InventoryFilters>): void => setFilters((current) => ({ ...current, ...next }))
 
-  const move = (item: ItemRow, destination: string): void => {
-    if (item.locationKey === destination) return
-    const label = DESTINATION_LABEL[destination] ?? destination
-    // Optimistic: the grid moves on drop, then the request goes out. Waiting for
-    // the round trip left the item visibly where it started for hundreds of ms.
-    patchRows((rows) => applyMove(rows, item.instanceId, destination))
-    void runAction(
-      { kind: 'move', instanceId: item.instanceId, destination },
-      item.name,
-      '把「' + item.name + '」移到' + label,
-      item.icon,
-    )
-  }
-
   const onCellDrop = (event: DragEvent<HTMLDivElement>, cell: StoreCell): void => {
     event.preventDefault()
     setDropTarget(null)
@@ -304,48 +244,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     const item = itemById.get(id) ?? dragging
     setDragging(null)
     if (item === null || item === undefined) return
-    move(item, cell.location)
-  }
-
-  const onEquip = async (detail: ItemDetailView): Promise<void> => {
-    if (!isCharacter(detail.location)) {
-      pushReceipt(false, '装备「' + detail.name + '」', '这件不在角色身上：先拖到角色背包，再装备。')
-      return
-    }
-    setBusy(true)
-    try {
-      const receipt = await postAction(
-        routePath,
-        { kind: 'equip', instanceId: detail.instanceId, character: detail.location },
-        detail.name,
-        new AbortController().signal,
-      )
-      if (receipt.needsConfirm === true) setPendingEquip({ detail, summary: receipt.summary })
-    } catch (error) {
-      pushReceipt(false, '装备「' + detail.name + '」', error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const confirmEquip = async (): Promise<void> => {
-    if (pendingEquip === null) return
-    const { detail } = pendingEquip
-    setPendingEquip(null)
-    await runAction(
-      { kind: 'equip', instanceId: detail.instanceId, character: detail.location, confirmed: true },
-      detail.name,
-      '装备「' + detail.name + '」',
-    )
-  }
-
-  const onToggleLock = async (detail: ItemDetailView): Promise<void> => {
-    await runAction(
-      { kind: 'lock', instanceId: detail.instanceId, locked: !detail.locked },
-      detail.name,
-      (detail.locked ? '解锁' : '锁定') + '「' + detail.name + '」',
-    )
-    hoverCard.close()
+    actions.move(item, cell.location)
   }
 
   /** One tile; shared by the flat list and the segmented vault. */
@@ -442,7 +341,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         filters={filters}
         types={types}
         countLabel={state.kind === 'ready' ? visibleCount + ' / ' + state.snapshot.total : ''}
-        busy={busy}
+        busy={actions.busy}
         onPatch={patch}
         onRefresh={() => load(new AbortController().signal, true)}
       />
@@ -509,24 +408,24 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           anchor={hoverCard.target.anchor}
           anchorSummary={hoverCard.target.summary}
           onClose={hoverCard.close}
-          onEquip={(detail) => void onEquip(detail)}
-          onToggleLock={(detail) => void onToggleLock(detail)}
+          onEquip={(detail) => void actions.equip(detail)}
+          onToggleLock={(detail) => void actions.toggleLock(detail)}
         />
       )}
 
-      {pendingEquip !== null && (
-        <div className="dsh-destiny-detail__scrim" onClick={() => setPendingEquip(null)} role="presentation">
+      {actions.pendingEquip !== null && (
+        <div className="dsh-destiny-detail__scrim" onClick={actions.cancelEquip} role="presentation">
           <section className="dsh-destiny-confirm" onClick={(event) => event.stopPropagation()}>
             <p className="dsh-destiny-confirm__title">确认装备</p>
-            <p className="dsh-destiny-confirm__body">{pendingEquip.summary}</p>
+            <p className="dsh-destiny-confirm__body">{actions.pendingEquip.summary}</p>
             <p className="dsh-destiny-confirm__note">
               装备会顶掉当前槽位上的那一件，这是一次真实的账号写入。
             </p>
             <div className="dsh-destiny-confirm__actions">
-              <button type="button" onClick={() => setPendingEquip(null)}>
+              <button type="button" onClick={actions.cancelEquip}>
                 取消
               </button>
-              <button type="button" className="is-primary" onClick={() => void confirmEquip()}>
+              <button type="button" className="is-primary" onClick={() => void actions.confirmEquip()}>
                 装备
               </button>
             </div>

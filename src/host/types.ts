@@ -240,7 +240,21 @@ export interface ItemDetailView {
 
 /** One account write the browser half can request. */
 export type ActionRequest =
-  | { kind: 'move'; instanceId: string; destination: string; equip?: boolean }
+  | {
+      kind: 'move'
+      instanceId: string
+      destination: string
+      /**
+       * Where the item is *now*, as the panel is showing it.
+       *
+       * Required, not a hint: Bungie syncs behind by seconds, so a snapshot read at
+       * write time can still describe the world before the write this one queued
+       * behind. The panel knows the answer for certain; deriving it again from a
+       * stale snapshot is how the wrong character ended up in the request.
+       */
+      from: string
+      equip?: boolean
+    }
   | { kind: 'lock'; instanceId: string; locked: boolean; character?: string }
   | { kind: 'pull_postmaster'; instanceId: string; character?: string }
   | { kind: 'equip'; instanceId: string; character?: string; confirmed?: boolean }

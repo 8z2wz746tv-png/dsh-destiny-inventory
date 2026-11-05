@@ -7,6 +7,7 @@
 import type { BungieClient } from '../bungie/client'
 import type { ProfileSnapshot } from '../bungie/profile'
 import { CLASS_LOCATION } from './dto'
+import { BridgeFault } from './http'
 import { equipItem, pullFromPostmaster, setLockState, transferItem } from '../bungie/write'
 import type { ItemWrite, WriteTarget } from '../bungie/write'
 
@@ -35,45 +36,47 @@ export async function runItemWrite(deps: WriteDeps, write: ItemWrite): Promise<s
   if (write.kind === 'lock') {
     const owner =
       write.characterId ?? (await ownerOf(deps.snapshot, instanceId)) ?? (await activeCharacter(deps.snapshot))
-    if (owner === undefined) throw new Error('找不到可以代表这次操作的角色，请刷新后再试')
+    if (owner === undefined) throw new BridgeFault('BadRequest', '找不到可以代表这次操作的角色，请刷新后再试')
     await setLockState(client, target, instanceId, owner, write.locked === true)
     deps.invalidate()
     return write.locked === true ? '已锁定' : '已解锁'
   }
   if (write.kind === 'equip') {
-    if (write.characterId === undefined) throw new Error('装备需要目标角色')
+    if (write.characterId === undefined) throw new BridgeFault('BadRequest', '装备需要目标角色')
     const wearer = await idOf(deps.snapshot, write.characterId)
-    if (wearer === undefined) throw new Error('找不到目标角色，请刷新后再试')
+    if (wearer === undefined) throw new BridgeFault('BadRequest', '找不到目标角色，请刷新后再试')
     await equipItem(client, target, instanceId, wearer)
     deps.invalidate()
     return '已装备'
   }
   const snapshot = await deps.snapshot()
   const item = snapshot.items.find((entry) => entry.instanceId === instanceId)
-  if (item === undefined) throw new Error('这件物品不在当前快照里')
+  if (item === undefined) throw new BridgeFault('NotFound', '这件物品不在当前快照里，先刷新库存')
   if (write.kind === 'pull_postmaster') {
-    if (write.characterId === undefined) throw new Error('取回需要指定角色')
+    if (write.characterId === undefined) throw new BridgeFault('BadRequest', '取回需要指定角色')
     const owner = await idOf(deps.snapshot, write.characterId)
-    if (owner === undefined) throw new Error('找不到目标角色，请刷新后再试')
+    if (owner === undefined) throw new BridgeFault('BadRequest', '找不到目标角色，请刷新后再试')
     await pullFromPostmaster(client, target, instanceId, item.itemHash, owner)
     deps.invalidate()
     return '已从邮政官取回'
   }
-  const toVault = write.characterId === undefined
-  // Banking names the character the item is leaving (DIM: `store.isVault ?
-  // item.owner : store.id`). The bridge hands us a location key, so resolve it to
-  // a real id first — `hunter` is not a character id and Bungie rejects it as a
-  // malformed body.
-  const destination = write.characterId
-  const mover = toVault
-    ? (item.characterId ?? (await activeCharacter(deps.snapshot)))
-    : destination === undefined
-      ? undefined
-      : await idOf(deps.snapshot, destination)
-  if (mover === undefined) throw new Error('找不到这件物品所属的角色，请刷新后再试')
-  await transferItem(client, target, instanceId, item.itemHash, toVault, mover)
+  // Banking names the character the item is leaving. That used to come from the
+  // snapshot, which lags: Bungie syncs writes seconds later, so a queued move could
+  // name the character the item *used* to be on. The panel knows; take its word and
+  // refuse rather than guess when it is missing.
+  if (write.characterId === undefined) {
+    if (write.from === undefined) throw new BridgeFault('BadRequest', '存进仓库需要知道物品现在在哪个角色（from），这次请求没带')
+    const owner = await idOf(deps.snapshot, write.from)
+    if (owner === undefined) throw new BridgeFault('BadRequest', '找不到这件物品所属的角色，请刷新后再试')
+    await transferItem(client, target, instanceId, item.itemHash, true, owner)
+    deps.invalidate()
+    return '已存入仓库'
+  }
+  const destination = await idOf(deps.snapshot, write.characterId)
+  if (destination === undefined) throw new BridgeFault('BadRequest', '找不到目标角色，请刷新后再试')
+  await transferItem(client, target, instanceId, item.itemHash, false, destination)
   deps.invalidate()
-  return toVault ? '已存入仓库' : '已移到角色背包'
+  return '已移到角色背包'
 }
 
 /** Which character holds this instance right now. */

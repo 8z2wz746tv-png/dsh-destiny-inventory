@@ -1,6 +1,6 @@
 # 交接文档
 
-写于 2026-11-06 02:10，v0.47.1。
+写于 2026-11-06，v0.48.0。
 **换会话先读这份，再读 `AGENTS.md`。**
 
 ---
@@ -30,12 +30,12 @@
 
 ## 二、现在到哪了
 
-**版本 0.47.1**。包在 `archive/packages/`（该目录已 gitignore，只留最近 5 个）。
+**版本 0.48.0**。包在 `archive/packages/`（该目录已 gitignore，只留最近 5 个）。
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
 | **P1 数据面** | ✅ 完成 | 没有独立 OAuth，读 MCP 的 token（已知偏离，见下） |
-| **P2 写入面** | 🟡 约 85% | 四个动作 + 乐观 + 待确认 + 回读；**缺写队列** |
+| **P2 写入面** | ✅ 真机验证过 | 四个动作 + 乐观 + 待确认 + 回读 + **写队列**（见 §四之 5–8） |
 | **P3 上下文** | ✅ 完成并真机验证 | 两个工具 + journal + `/context` + agent-detected |
 | **P4** | 🟡 部分 | 属性条有；套装、能量条、模组写入没有；搜索语法用户明确不要 |
 
@@ -61,7 +61,6 @@
 | `client.ts` (200) | HTTP：GET/POST + 信封解码 + 中文错误映射 |
 | `sockets.ts` (101) | 组件 305（插槽）+ 304（实例属性）的形状 |
 | `write.ts` (158) | 四个写入端点 + `toItemWrite`（bridge 请求 → 写入指令） |
-| `item-state.ts` | 单件状态回读（`GetItem`，不是全量） |
 | `lookup.ts` (75) | `DefinitionLookup` 契约 + `buildLookup`（主机层的读取面） |
 | `memberships.ts` | token 属于哪个 Destiny 账号 |
 | `token-file-provider.ts` (133) | 只读 MCP 的 token，从不刷新 |
@@ -80,8 +79,11 @@
 | `stat-lines.ts` (43) | 属性行（护甲走自己的遍历表，武器走 `statGroupHash`） |
 | `enhanced-perks.ts` (441) | 强化 perk 映射（照搬 DIM 的 `trait-to-enhanced-trait.json`） |
 | `types.ts` (266) | **线格式契约**：`ItemRow` / `ItemDetailView` / `CharacterRow` |
-| `item-write.ts` (124) | 一次写入的编排：找物品、解析角色 id、执行、失效缓存 |
-| `item-state-route.ts` (35) | 单件状态的解析（位置键 + equipped） |
+| `item-write.ts` (126) | 一次写入的编排：找物品、解析角色 id、执行、失效缓存 |
+| `serialize-writes.ts` (29) | **写队列（host）**：`/action` 一次只跑一个，journal 顺序 = 真实顺序 |
+| `item-state-route.ts` (36) | 单件状态的解析（位置键 + equipped）。**从 profile 读，不走 `.../Item/{id}/`** |
+| `action-route.ts` (53) | `/action` 的编排：写 + 串行 + journal，路由层只做 HTTP |
+| `snapshot-cache.ts` (81) | 快照三态：新鲜 / 标记过期 / 写时直读（见 §四之 8） |
 | `context-store.ts` (131) | **P3**：`ViewContext` + 200 条 journal + jsonl 落盘 |
 | `agent-tools.ts` (51) | **P3**：两个只读工具的注册 |
 | `journal-record.ts` (37) | 写入 → 一条 journal 记录（含 `from`/`to` 映射） |
@@ -92,7 +94,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `InventoryPanel.tsx` (538) | 面板主体：状态、拖拽、动作、行渲染。**590 行上限** |
+| `InventoryPanel.tsx` (437) | 面板主体：状态、拖拽、行渲染。上限 **450**（动作编排抽走后下调） |
 | `filter.ts` (329) | 筛选、分区、行、单元格构建 |
 | `buckets.ts` (108) | **唯一**的桶分类表（照 DIM 的 `D2Categories`） |
 | `cells.ts` (46) | 单元格构造（vault 格带 `segments`） |
@@ -105,6 +107,8 @@
 | `RecoilGauge.tsx` (32) | 后坐方向仪表 |
 | `ammo-icons.ts` (22) | 三种弹药图标（抄 DIM 的 SVG） |
 | `apply-move.ts` (109) | **乐观移动**：`applyMove` / `settleMove` / `confirmMove` / `applyLock` |
+| `write-queue.ts` (145) | **写队列（客户端）**：串行、同物品未启动的 move 被后一次替换、可取消 |
+| `use-item-actions.ts` (209) | **动作编排**：把 `move`/`equip`/`lock` 送进队列；`busy` = 队列非空 |
 | `settle-by-readback.ts` (38) | 失败后的回读落定 |
 | `api.ts` (200) | 桥接请求 + 详情缓存（promise + 已解析值两份） |
 | `use-hover-card.ts` (41) | 卡片状态（点开 / 点外关） |
@@ -166,6 +170,45 @@ HighlightedObjective = 16, Enhanced = 32
 角色格永远平铺，不分段。
 
 早期我把分组做成"行级"，破坏了四列对齐——`docs/GROUPING_PLAN.md` 里有对账。
+
+### 5. 写入必须自己说清"物品现在在哪"
+
+`ActionRequest` 的 `move` 带**必填** `from`（面板手里的 `locationKey`）。
+
+- **为什么**：Bungie 写后同步窗口 3–10 秒，写队列又让两笔写紧邻执行，所以写的那一刻重新读的快照
+  描述的往往是**上一笔之前**的世界。存进仓库要写"物品离开的那个角色"，拿快照猜就会猜错。
+- **缺了怎么办**：host 直接报错（`存进仓库需要知道物品现在在哪个角色（from）`），不退回快照。
+  AGENTS.md §0.5：不许替调用方下结论。
+- `lock` / `pull_postmaster` 的 `activeCharacter()` 回退**保留**：那两件确实可能不带角色，
+  取"最近游玩的角色"是 DIM 的做法，不是猜。
+
+### 6. 写队列的两层
+
+| 层 | 在哪 | 管什么 |
+|---|---|---|
+| 客户端 | `src/client/write-queue.ts` | 串行；同物品**未启动**的 `move` 被后一次替换（意图是最终位置，不是路径）；排队中的可取消，在途的只能 abort |
+| host | `src/host/serialize-writes.ts` | `/action` 一次只跑一个：多标签页不打架，journal 顺序 = 真实顺序 |
+
+`busy` 的含义随之变成**队列非空**（在途或有排队），不再是"一个请求在路上"。
+失败不阻塞后续任务；任务的 `pending` 环一直挂到请求成功才摘。
+
+### 7. 回读不能走 `.../Item/{id}/`
+
+2026-11-06 实测：那个端点只回 `instance`（实例组件），**从不回 `characterId`**，于是
+"失败后按 Bungie 的真实结果落定"从来没生效过——每次都判定"物品不在了"，面板就继续信自己的
+乐观位置。现在改成从**强制刷新的 profile** 里找，`src/bungie/item-state.ts` 已删。
+
+代价是失败回读要拉一次完整 profile（约 1.5 秒），只在失败路径上发生。
+
+### 8. 写路径允许读陈旧快照（`SnapshotCache`）
+
+写只需要两样东西：物品 hash 和角色表，**两者都不随物品移动而变**。原来每笔写完就清缓存，
+下一笔为拿 hash 又得重拉 1.5 秒——排队之后这笔钱每笔都付，五件就从 2 秒变 8 秒。
+
+`SnapshotCache` 因此有三个入口：`current()`（读者，认 TTL 与 stale 标记）、`stable()`
+（写，忽略 TTL 与 stale）、`markStale()`（写完）。**不是静默降级**：写要的那两个值确实不变，
+而读者下一次一定会回 Bungie。
+
 
 ---
 
@@ -248,13 +291,14 @@ BUNGIE_API_KEY="$(grep '^BUNGIE_API_KEY=' ~/项目/destiny2-mcp/.env | cut -d= -
 ## 九、待办（按优先级）
 
 1. **搜索**（方案 `docs/PLAN-SEARCH.md` 已定；不碰写接口；日常收益最大）
-2. **写队列**（并发正确性，不是功能；`busy` 现在只是 UI 标志，连点两次会发两个请求）
-3. 标记体系（垃圾/保留/青睐/灌注/归档，本地存）
-4. 批量选择（框选 + 批量锁定/标记）
-5. 插槽可点（换 perk / 装模组，走 `InsertSocketPlugFree`）
-6. 护甲卡：能量条、套装加成
-7. 修「命运随航」预设（结构已改，未验证）
-8. journal 的时间戳改 ISO（现在存 `Date.now()` 毫秒数，agent 要自己换算时区）
+2. 标记体系（垃圾/保留/青睐/灌注/归档，本地存）
+3. 批量选择（框选 + 批量锁定/标记）
+4. 插槽可点（换 perk / 装模组，走 `InsertSocketPlugFree`）
+5. 护甲卡：能量条、套装加成
+6. 修「命运随航」预设（结构已改，未验证）
+7. journal 的时间戳改 ISO（现在存 `Date.now()` 毫秒数，agent 要自己换算时区）
+
+~~写队列~~ ✅ 见 `docs/PLAN-WRITE-QUEUE.md`、§四之 5。
 
 ---
 

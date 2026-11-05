@@ -96,7 +96,12 @@ describe('the panel only talks to its own bridge route', () => {
     const urls = stub(() =>
       ok({ kind: 'move', applied: true, message: 'ok', summary: 'ok' }),
     )
-    await postAction(ROUTE, { kind: 'move', instanceId: '1', destination: 'vault' }, 'x', signal)
+    await postAction(
+      ROUTE,
+      { kind: 'move', instanceId: '1', destination: 'vault', from: 'hunter' },
+      'x',
+      signal,
+    )
     expect(urls).toHaveLength(1)
     expect(urls[0]).toBe(`${ROUTE}/action`)
   })

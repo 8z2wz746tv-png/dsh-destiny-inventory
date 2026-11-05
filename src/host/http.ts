@@ -29,8 +29,36 @@ export async function readJsonBody(req: IncomingMessage, limitBytes = 64 * 1024)
   return JSON.parse(text)
 }
 
+/** A refusal we decided on ourselves: the request cannot be carried out as sent. */
+export class BridgeFault extends Error {
+  readonly code: string
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'BridgeFault'
+    this.code = code
+  }
+}
+
+/**
+ * Wire status for a failure.
+ *
+ * Our own refusals are the caller's mistake and must not look like an outage: a
+ * 502 sends people looking at the host log for a fault that never happened.
+ * @param failure - the translated failure.
+ */
+export function statusOf(failure: { code: string }): number {
+  if (failure.code === 'BadRequest') return 400
+  if (failure.code === 'NotFound') return 404
+  if (failure.code === 'AUTH_UNAVAILABLE') return 401
+  return 502
+}
+
 /** Translate a thrown bridge fault into a stable wire code. */
 export function toFailure(error: unknown): { code: string; message: string } {
+  if (error instanceof BridgeFault) {
+    // Already a sentence for the operator, with no guessing needed.
+    return { code: error.code, message: error.message }
+  }
   if (error instanceof AuthUnavailableError) {
     // Never paper over this: the browser half shows the reason verbatim.
     return { code: 'AUTH_UNAVAILABLE', message: `认证不可用（${error.reason}）：${error.message}` }

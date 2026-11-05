@@ -8,13 +8,13 @@ import { Config } from './config'
 import type { Config as ConfigShape } from './config'
 import { readItemDetail } from './host/item-detail'
 import { BungieService } from './host/bungie-service'
-import { toItemWrite } from './bungie/write'
 import { ContextStore } from './host/context-store'
 import type { ViewContext } from './host/context-store'
 import { registerAgentTools } from './host/agent-tools'
-import { readJsonBody, sendJson, toFailure } from './host/http'
+import { runAction } from './host/action-route'
+import { readJsonBody, sendJson, statusOf, toFailure } from './host/http'
+import { WriteSerializer } from './host/serialize-writes'
 import { detectExternal } from './host/detect-external'
-import { record } from './host/journal-record'
 import type { ActionRequest, BridgeResponse } from './host/types'
 
 export const name = 'dsh-destiny-inventory'
@@ -45,6 +45,8 @@ export function apply(ctx: Context, config: ConfigShape): void {
   // What the panel is showing and what has been done through it; the agent reads
   // this, it never writes through it.
   const context = new ContextStore(config.journalPath)
+  // One write at a time on this route, whatever asks for it.
+  const writes = new WriteSerializer()
   registerAgentTools(ctx, context)
   ctx.webServer.register({
     kind: 'prefix',
@@ -84,23 +86,28 @@ export function apply(ctx: Context, config: ConfigShape): void {
             })
             return
           }
-          const write = toItemWrite(body.request)
-          // Snapshot the origin before the write: afterwards the item has moved.
-          const from = await service.locationOf(write.instanceId)
-          try {
-            // Straight to Bungie: the MCP hop added seconds to every drag.
-            const summary = await service.write(write)
-            record(context, write, body.itemName ?? '', from, 'ok', summary)
-            sendJson(res, 200, {
-              ok: true,
-              data: { applied: true, summary, message: summary },
-            } satisfies BridgeResponse<unknown>)
-          } catch (error) {
-            record(context, write, body.itemName ?? '', from, 'failed', toFailure(error).message)
-            throw error
+          // An incomplete move is the caller's mistake, not an outage: say so here
+          // instead of letting the data plane turn it into a 502 and journal a
+          // write that never left.
+          if (body.request.kind === 'move' && !body.request.from) {
+            sendJson(res, 400, {
+              ok: false,
+              error: { code: 'BadRequest', message: 'move 需要 from（这件物品现在在哪个位置键）' },
+            })
+            return
           }
+          const summary = await runAction(
+            { service, context, writes },
+            body.request,
+            body.itemName ?? '',
+          )
+          sendJson(res, 200, {
+            ok: true,
+            data: { applied: true, summary, message: summary },
+          } satisfies BridgeResponse<unknown>)
         } catch (error) {
-          sendJson(res, 502, { ok: false, error: toFailure(error) } satisfies BridgeResponse<never>)
+          const failure = toFailure(error)
+          sendJson(res, statusOf(failure), { ok: false, error: failure } satisfies BridgeResponse<never>)
         }
         return
       }
@@ -177,7 +184,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
         })
       } catch (error) {
         const failure = toFailure(error)
-        sendJson(res, failure.code === 'AUTH_UNAVAILABLE' ? 401 : 502, {
+        sendJson(res, statusOf(failure), {
           ok: false,
           error: failure,
         } satisfies BridgeResponse<never>)

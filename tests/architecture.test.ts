@@ -28,9 +28,16 @@ function lineCounts(): Map<string, number> {
 describe('module size', () => {
   /** Ceilings ratchet down; raising one needs a split, not a bigger number. */
   const CEILINGS: Record<string, number> = {
-    'src/client/InventoryPanel.tsx': 540,
+    'src/client/InventoryPanel.tsx': 450,
     'src/client/styles.ts': 540,
     'src/client/filter.ts': 360,
+    'src/client/write-queue.ts': 150,
+    'src/client/use-item-actions.ts': 220,
+    'src/client/use-receipts.ts': 90,
+    'src/host/serialize-writes.ts': 40,
+    'src/host/snapshot-cache.ts': 100,
+    'src/host/action-route.ts': 60,
+    'src/host/item-state-route.ts': 45,
     'src/bungie/profile.ts': 340,
     'src/host/stat-lines.ts': 80,
     'src/bungie/values.ts': 30,
@@ -51,8 +58,8 @@ describe('module size', () => {
     'src/client/api.ts': 210,
     'src/client/ItemTile.tsx': 140,
     'src/client/use-hover-card.ts': 80,
-    'src/host/bungie-service.ts': 310,
-    'src/host/dto.ts': 260,
+    'src/host/bungie-service.ts': 305,
+    'src/host/dto.ts': 258,
     'src/host/item-detail.ts': 260,
     'src/host/details-bulk.ts': 60,
     'src/host/stat-order.ts': 90,
@@ -90,11 +97,14 @@ describe('retired paths stay retired', () => {
   })
 
   it('writes through our own plane instead of the MCP tool', () => {
-    const index = readFileSync(join(SRC, 'index.ts'), 'utf8')
     // PLAN §1: the front end owns its writes. Routing them through the MCP added
     // a host → MCP process → Bungie hop to every drag.
-    expect(index).toContain('service.write(')
-    expect(index).not.toContain('runAction')
+    const route = readFileSync(join(SRC, 'host/action-route.ts'), 'utf8')
+    expect(route).toContain('service.write(')
+    expect(route).not.toContain('ctx.tools')
+    // The route delegates rather than writing: one place to reach Bungie, one place
+    // that has to be serialized.
+    expect(readFileSync(join(SRC, 'index.ts'), 'utf8')).toContain("from './host/action-route'")
   })
 
   it('invalidates the live snapshot after a write', () => {

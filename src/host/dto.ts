@@ -9,7 +9,15 @@
  * keeps the hash as a visible marker (`#1234`), the bucket keeps `bucket:5678`,
  * and the caller is told how many rows were degraded.
  */
-import type { CharacterRow, EquippedState, ItemPlacement, ItemRow, ItemRarity } from './types'
+import type { ProfileSnapshot } from '../bungie/profile'
+import type {
+  CharacterRow,
+  EquippedState,
+  ItemPlacement,
+  ItemRow,
+  ItemRarity,
+  PlayerProfileView,
+} from './types'
 
 /** Bungie classType → the location key the frontend already uses. */
 export const CLASS_LOCATION: Record<number, string> = { 0: 'titan', 1: 'hunter', 2: 'warlock' }
@@ -22,6 +30,9 @@ const ITEM_TYPE_WEAPON = 3
 const TIER = { rare: 4, legendary: 5, exotic: 6 } as const
 
 /** One character as the bridge reports it. */
+/** Localized class names, in Bungie's `classType` order. */
+const CLASS_NAME: Record<number, string> = { 0: '泰坦', 1: '猎人', 2: '术士' }
+
 export interface CharacterSource {
   characterId: string
   classType: number
@@ -210,5 +221,36 @@ export function toCharacterRow(source: CharacterSource): CharacterRow {
     emblemBackground: source.emblemBackground,
     title: source.title ?? '',
     lastPlayed: source.lastPlayed,
+  }
+}
+
+/**
+ * The account header the panel opens with.
+ *
+ * Pure shape conversion, so it lives here; the service only supplies the read and
+ * the title lookup.
+ * @param snapshot - the profile read.
+ * @param titleName - record hash → localized title, or empty.
+ */
+export function toProfileView(
+  snapshot: ProfileSnapshot,
+  titleName: (hash: number | null) => string,
+): PlayerProfileView {
+  return {
+    displayName: snapshot.displayName,
+    membershipId: snapshot.membershipId,
+    triumphScore: null,
+    characters: snapshot.characters.map((character) =>
+      toCharacterRow({
+        characterId: character.characterId,
+        classType: character.classType,
+        className: CLASS_NAME[character.classType] ?? '',
+        light: character.light,
+        emblemPath: character.emblemPath,
+        emblemBackground: character.emblemBackground,
+        title: titleName(character.titleRecordHash),
+        lastPlayed: character.lastPlayed,
+      }),
+    ),
   }
 }

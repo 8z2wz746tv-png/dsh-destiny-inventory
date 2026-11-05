@@ -28,6 +28,14 @@ const TTL_MS = 5000
 export interface ReceiptHandle {
   /** Update the line's headline, e.g. after the host names what it did. */
   rename: (text: string) => void
+  /**
+   * Update the detail without finishing the line.
+   *
+   * A queued write has to say it is waiting rather than pretend it is on the wire:
+   * the line appears the moment the user drops the item, seconds before the queue
+   * gets to it.
+   */
+  progress: (detail: string) => void
   /** Finish it. A success schedules its own removal; a failure stays. */
   settle: (ok: boolean, detail: string) => void
 }
@@ -53,6 +61,7 @@ export function useReceipts(): ReceiptController {
     }
     return {
       rename: (next) => patch({ text: next }),
+      progress: (detail) => patch({ detail }),
       settle: (ok, detail) => {
         patch({ ok, pending: false, detail })
         if (ok) window.setTimeout(() => dismiss(id), TTL_MS)

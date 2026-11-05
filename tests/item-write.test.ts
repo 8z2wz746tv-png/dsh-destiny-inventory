@@ -85,4 +85,23 @@ describe('runItemWrite', () => {
     ).rejects.toThrow('这件物品不在当前快照里')
     expect(post).not.toHaveBeenCalled()
   })
+
+  it('banks against the position the panel reported, not the snapshot', async () => {
+    const post = vi.fn(async () => ({}))
+    // The snapshot still says the hunter: it was read before the write this one
+    // queued behind, and Bungie syncs that write seconds later.
+    const d = deps(post, [{ instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' }])
+    await runItemWrite(d, { kind: 'move', instanceId: 'i1', from: 'warlock' })
+    const body = (post.mock.calls[0] as unknown as [string, { characterId: string; transferToVault: boolean }])[1]
+    expect(body.transferToVault).toBe(true)
+    expect(body.characterId).toBe('char-warlock')
+  })
+
+  it('refuses to bank without knowing where the item is', async () => {
+    const post = vi.fn(async () => ({}))
+    // No `from` means the caller left the answer to a snapshot that may be stale.
+    // Guessing is worse than failing: say what is missing.
+    await expect(runItemWrite(deps(post), { kind: 'move', instanceId: 'i1' })).rejects.toThrow('from')
+    expect(post).not.toHaveBeenCalled()
+  })
 })

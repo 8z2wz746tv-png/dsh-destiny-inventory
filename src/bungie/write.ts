@@ -19,6 +19,8 @@ export interface ItemWrite {
   instanceId: string
   /** Destination for `move`; owner for `equip`/`lock`/`pull_postmaster`. */
   characterId?: string
+  /** `move` only: where the item is right now, as the panel knows it. */
+  from?: string
   /** `lock` only. */
   locked?: boolean
 }
@@ -136,6 +138,7 @@ export function toItemWrite(request: {
   kind: 'move' | 'equip' | 'lock' | 'pull_postmaster'
   instanceId: string
   destination?: string
+  from?: string
   character?: string
   locked?: boolean
   confirmed?: boolean
@@ -154,5 +157,6 @@ export function toItemWrite(request: {
     kind: 'move',
     instanceId: request.instanceId,
     characterId: request.destination === 'vault' ? undefined : request.destination,
+    from: request.from,
   }
 }
