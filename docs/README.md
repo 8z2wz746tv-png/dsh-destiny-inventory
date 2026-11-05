@@ -8,6 +8,7 @@
 | 文档 | 讲什么 | 什么时候看 |
 |---|---|---|
 | [`CODING-STANDARDS.md`](CODING-STANDARDS.md) | 跨项目可移植的编码规范骨架 | 写代码前 |
+| [`STATUS.md`](STATUS.md) | 对照四个阶段，哪完成、哪缺、为什么 | 决定下一步之前 |
 | [`PLAN-SEARCH.md`](PLAN-SEARCH.md) | 搜索怎么做：中文名 + perk 名，不引语法 | 要动搜索时 |
 | [`DIM-GAP-ANALYSIS.md`](DIM-GAP-ANALYSIS.md) | DIM 有什么我们没有（2026-11-06 普查） | 决定做什么之前 |
 | [`GROUPING_PLAN.md`](GROUPING_PLAN.md) | DIM 的仓库分组结构与我们的落点 | 要动分组时 |
