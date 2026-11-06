@@ -8,9 +8,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ActionReceipt, ActionRequest, ItemDetailView, ItemRow } from '../host/types'
-import { postAction } from './api'
-import { applyLock, applyMove, settleMove } from './apply-move'
-import { settleByReadBack } from './settle-by-readback'
+import { applyMove, confirmMove } from './apply-move'
+import { PendingOps } from './pending-ops'
+import { sendAction } from './send-action'
 import { WriteQueue } from './write-queue'
 import type { ReceiptController, ReceiptHandle } from './use-receipts'
 
@@ -62,6 +62,8 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
   // One queue for the life of the panel: it is the thing that makes two drags
   // take turns instead of racing.
   const queue = useMemo(() => new WriteQueue(), [])
+  /** What the panel asked for and Bungie has not confirmed; P1.3 starts drawing it. */
+  const pending = useMemo(() => new PendingOps(), [])
   const [busy, setBusy] = useState(false)
   const [pendingEquip, setPendingEquip] = useState<ItemActions['pendingEquip']>(null)
 
@@ -70,42 +72,6 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
     // write is still pending from the user's point of view.
     return queue.watch((depth) => setBusy(depth > 0))
   }, [queue])
-
-  /** Send one request and report it on its own receipt line. */
-  const send = useCallback(
-    async (
-      request: ActionRequest,
-      itemName: string,
-      line: ReceiptHandle,
-      signal: AbortSignal,
-      summary: string,
-    ): Promise<ActionReceipt | null> => {
-      line.progress('正在处理…')
-      try {
-        const receipt = await postAction(routePath, request, itemName, signal)
-        // The grid already moved on drop, so there is nothing to apply for a move;
-        // only now is the optimistic position confirmed, so only now does the ring go.
-        if (receipt.applied && request.kind === 'move') {
-          patchRows((rows) => settleMove(rows, request.instanceId, undefined))
-        }
-        if (receipt.applied && request.kind === 'lock') {
-          patchRows((rows) => applyLock(rows, request.instanceId, request.locked === true))
-        }
-        line.rename(receipt.summary !== '' ? receipt.summary : summary)
-        line.settle(true, receipt.message)
-        return receipt
-      } catch (error) {
-        line.settle(false, error instanceof Error ? error.message : String(error))
-        // A failed response does not mean the write did not land. Mark the item
-        // unknown and ask Bungie, rather than rolling back to a stale snapshot.
-        if (request.kind === 'move') {
-          await settleByReadBack(routePath, request.instanceId, request.destination, patchRows)
-        }
-        return null
-      }
-    },
-    [patchRows, routePath],
-  )
 
   /**
    * Queue one action, or report that a later drag replaced it.
@@ -122,6 +88,19 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
       itemIcon?: string,
     ): Promise<ActionReceipt | null> => {
       const key = request.instanceId
+      const eventId = crypto.randomUUID()
+      // Registered here, not when the request finally goes out: while it waits its
+      // turn in the queue a refresh would otherwise still show the old place.
+      if (request.kind === 'move') {
+        pending.submit({
+          eventId,
+          instanceId: key,
+          action: 'move',
+          target: request.destination,
+          from: request.from,
+          now: Date.now(),
+        })
+      }
       const ahead = queue.depth()
       const controller = new AbortController()
       let line: ReceiptHandle | undefined
@@ -134,12 +113,30 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
       line.progress(queueHint(ahead))
       return queue
         .enqueue(key, request.kind === 'move', () =>
-          send(request, itemName, line as ReceiptHandle, controller.signal, summary),
+          sendAction(
+            { routePath, pending, patchRows },
+            request,
+            itemName,
+            eventId,
+            line as ReceiptHandle,
+            controller.signal,
+            summary,
+          ),
         )
-        .then((outcome) => (outcome.kind === 'ran' ? outcome.value : null))
+        .then((outcome) => {
+          if (outcome.kind === 'ran') return outcome.value
+          // Replaced by a later drag, or cancelled while waiting: it never left, so
+          // it definitely did not execute. The overlay for a newer operation (if
+          // any) is a different `eventId` and is left alone.
+          const abandoned = pending.settle(eventId, 'rejected')
+          if (abandoned?.kind === 'failed' && request.kind === 'move') {
+            patchRows((rows) => confirmMove(rows, request.instanceId, request.from, false))
+          }
+          return null
+        })
         .catch(() => null)
     },
-    [queue, receipts, send],
+    [patchRows, pending, queue, receipts, routePath],
   )
 
   const move = useCallback(

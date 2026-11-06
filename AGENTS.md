@@ -201,6 +201,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/write-queue.ts` | 客户端写队列：串行、同物品未启动的 move 被替换、可取消。**纯逻辑，不碰 React**。 |
 | `src/client/pending-ops.ts` | **未核验的操作**：状态机、每物品序号、观测折叠、失败分类。没确认的操作不许被快照抹掉。**纯逻辑**。 |
 | `src/client/pending-ops-render.ts` | 把 rows 画过 overlay：未核验的行保持目标位置。**纯函数，只出 rows**。 |
+| `src/client/send-action.ts` | 一次写从发出到落定：接受/拒绝/不明三路分流。**拒绝恢复原位，不明才回读**。 |
 | `src/client/apply-move.ts` | 乐观移动：`applyMove`/`settleMove`/`confirmMove`/`applyLock`。 |
 | `src/client/settle-by-readback.ts` | 失败后按 Bungie 的真实位置落定，不回滚到可能已经过期的快照。 |
 | `src/client/api.ts` | 桥接请求 + 详情缓存（promise 与已解析值两份）。**浏览器唯一出口**。 |
