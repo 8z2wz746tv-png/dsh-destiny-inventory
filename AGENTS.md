@@ -181,6 +181,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/host/stat-lines.ts` | 属性表：护甲走自己的遍历表，武器走 `statGroupHash`。 |
 | `src/host/enhanced-perks.ts` | 强化 perk 映射，照搬 DIM 的 `trait-to-enhanced-trait.json`（441 行，纯数据）。 |
 | `src/host/action-route.ts` | `/action` 的编排：串行 → 写 → journal。**唯一的 `service.write(` 调用点**，守门会查。 |
+| `src/host/journal-resolve-route.ts` | `POST /journal/resolve`：把回读的真实结果贴回那条 `failed` 记录。前端是唯一会问"到底落没落"的一侧。 |
 | `src/host/serialize-writes.ts` | host 侧串行：多标签页不打架，journal 顺序 = 真实顺序。 |
 | `src/host/item-write.ts` | 一次写入的编排：找物品、解析角色 id、执行、失效缓存。缺 `from` 直接拒，不猜。 |
 | `src/host/item-state-route.ts` | 单件位置。**从强制刷新的 profile 读**——`.../Item/{id}/` 从不回 characterId。 |

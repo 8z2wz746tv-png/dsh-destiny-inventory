@@ -36,7 +36,7 @@
 |---|---|---|
 | **P1 数据面** | ✅ 完成 | 没有独立 OAuth，读 MCP 的 token（已知偏离，见下） |
 | **P2 写入面** | ✅ 真机验证过 | 四个动作 + 乐观 + 待确认 + 回读 + **写队列**（见 §四之 5–8） |
-| **P3 上下文** | ✅ 完成并真机验证 | 两个工具 + journal + `/context` + agent-detected |
+| **P3 上下文** | ✅ 完成并真机验证 | 两个工具 + journal + `/context` + agent-detected + **回读修正**（见 §四之 9） |
 | **P4** | 🟡 部分 | 属性条有；套装、能量条、模组写入没有；搜索语法用户明确不要 |
 
 ### P1 的已知偏离
@@ -215,6 +215,22 @@ HighlightedObjective = 16, Enhanced = 32
 
 ---
 
+### 9. agent 读到的 journal 必须说实话
+
+三处会让 agent 答错的地方，2026-11-06 补掉：
+
+| 症状 | 现在 |
+|---|---|
+| `from` 一列里混两种词汇（`hunter` 和 `2305843009679355779`） | `locationOf()` 走 `resolveItemState()`，全用位置键 |
+| 宽屏四列并排时报 `character: 'hunter'` | 报 `'all'`，别谎称在看某个角色 |
+| 写入失败 → 前端回读确认已落地，但 journal 永远停在 `failed` | 前端 `POST /journal/resolve`，那条补上 `resolution: { at, landed, location }` |
+
+`result` 因此只剩 `ok | failed`：`unconfirmed` 从没被写过，删掉了——"上游拒绝了但东西到位了"
+用 `resolution.landed` 说，比"不知道"精确。
+
+jsonl 是 append-only：修正是**第二行**，不是改原行。读文件时按 `at` 取最后一行。
+`emit()` 在排队时就序列化——晚一步写会把后续 `resolve()` 的改动带上，测试抓过这个。
+
 ## 五、这轮做的决定与理由
 
 ### 1. 乐观更新 + 待确认 + 回读（取代"失败按快照回滚"）
@@ -241,9 +257,11 @@ HighlightedObjective = 16, Enhanced = 32
 
 DIM 有 152 个搜索关键词（`is:dupe`、`stat:range:>=50`…）。**用户明确说不会用**，要中文名 + perk 名搜索。方案在 `docs/plans/PLAN-SEARCH.md`，未实现。
 
-### 4. journal 的 `result` 是 `ok | failed | unconfirmed`
+### 4. journal 的 `result` 只有 `ok | failed`（2026-11-06 收窄）
 
-原计划第三个是 `rolledback`。不做回滚了，换成 `unconfirmed`。
+原计划第三个是 `rolledback`；不做回滚之后换成了 `unconfirmed`，但**那个值从来没被写过**——
+写入失败时前端会单件回读，那条记录该不该翻案，用 `resolution.landed` 说更准。所以删掉
+`unconfirmed`，见 §四之 9。
 
 ---
 

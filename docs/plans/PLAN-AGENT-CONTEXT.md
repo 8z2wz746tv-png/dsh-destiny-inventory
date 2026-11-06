@@ -43,7 +43,10 @@ interface JournalEntry {
 
 **落盘**：`~/.dsh/destiny-workspace/journal.jsonl`，追加写，保留最近 200 条。内存仍是唯一真源，落盘只为排查。
 
-`result` 值是 `ok | failed | unconfirmed`——原计划的第三个是 `rolledback`，现在不做回滚了（见 `docs/plans/PLAN-SELF-HOSTED-DIM.md` §3.2），换成 `unconfirmed`。
+`result` 只有 `ok | failed`。原计划的第三个是 `rolledback`，不做回滚之后换成了 `unconfirmed`，
+但**那个值从来没被写过**：写入失败时前端会单件回读，拿到答案后它会 `POST /journal/resolve`，
+宿主把那一条补上 `resolution: { at, landed, location }`。这比 `unconfirmed` 诚实——它说的是
+"上游拒绝了，但东西真的到那儿了"，而不是"不知道"。2026-11-06 补上，`unconfirmed` 已删。
 
 ### 两个工具 —— 原名
 

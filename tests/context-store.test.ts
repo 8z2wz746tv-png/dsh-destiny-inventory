@@ -66,4 +66,43 @@ describe('context store', () => {
     expect(parsed.from).toBe('hunter')
     expect(parsed.to).toBe('vault')
   })
+
+  it('corrects a failure the read-back says actually landed', async () => {
+    const store = new ContextStore('/tmp/never-written.jsonl', () => 99)
+    store.record(entry({ at: 7, result: 'failed', detail: 'Bungie 拒绝了这次请求' }))
+    const corrected = store.resolve('i1', true, 'vault')
+    expect(corrected?.resolution).toEqual({ at: 99, landed: true, location: 'vault' })
+    expect(store.recent()[0]?.resolution?.landed).toBe(true)
+  })
+
+  it('only corrects the newest unresolved failure for that item', () => {
+    const store = new ContextStore('/tmp/never-written.jsonl', () => 5)
+    store.record(entry({ at: 1, result: 'failed' }))
+    store.record(entry({ at: 2, result: 'failed' }))
+    expect(store.resolve('i1', true, 'vault')?.at).toBe(2)
+    // the older one belongs to a write the user already moved past
+    expect(store.recent()[1]?.resolution).toBeUndefined()
+  })
+
+  it('does nothing when there is no failure to correct', () => {
+    const store = new ContextStore('/tmp/never-written.jsonl')
+    store.record(entry({ result: 'ok' }))
+    // Injectable violation: match on instanceId alone and this returns the ok entry,
+    // stamping a resolution onto a write that never needed one.
+    expect(store.resolve('i1', true, 'vault')).toBeNull()
+    expect(store.recent()[0]?.resolution).toBeUndefined()
+  })
+
+  it('writes the correction to disk as a second line, never an edit', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'journal-'))
+    const path = join(dir, 'journal.jsonl')
+    const store = new ContextStore(path, () => 42)
+    store.record(entry({ at: 7, result: 'failed', detail: 'Bungie 拒绝了这次请求' }))
+    store.resolve('i1', true, 'vault')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const lines = (await readFile(path, 'utf8')).trim().split('\n').map((line) => JSON.parse(line) as JournalEntry)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]?.resolution).toBeUndefined()
+    expect(lines[1]?.resolution).toEqual({ at: 42, landed: true, location: 'vault' })
+  })
 })

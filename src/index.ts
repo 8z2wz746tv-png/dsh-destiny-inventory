@@ -12,6 +12,7 @@ import { ContextStore } from './host/context-store'
 import type { ViewContext } from './host/context-store'
 import { registerAgentTools } from './host/agent-tools'
 import { runAction } from './host/action-route'
+import { handleJournalResolve } from './host/journal-resolve-route'
 import { readJsonBody, sendJson, statusOf, toFailure } from './host/http'
 import { WriteSerializer } from './host/serialize-writes'
 import { detectExternal } from './host/detect-external'
@@ -80,10 +81,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
             itemName?: string
           }
           if (body.request === undefined) {
-            sendJson(res, 400, {
-              ok: false,
-              error: { code: 'BadRequest', message: 'body needs { request, itemName }' },
-            })
+            sendJson(res, 400, { ok: false, error: { code: 'BadRequest', message: 'body needs { request, itemName }' } })
             return
           }
           // An incomplete move is the caller's mistake, not an outage: say so here
@@ -109,6 +107,12 @@ export function apply(ctx: Context, config: ConfigShape): void {
           const failure = toFailure(error)
           sendJson(res, statusOf(failure), { ok: false, error: failure } satisfies BridgeResponse<never>)
         }
+        return
+      }
+
+      // A read-back can correct a write the bridge already reported as failed.
+      if (query === '/journal/resolve') {
+        await handleJournalResolve(req, res, context)
         return
       }
 

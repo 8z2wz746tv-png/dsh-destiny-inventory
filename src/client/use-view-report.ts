@@ -10,6 +10,7 @@ import { useEffect, useRef } from 'react'
 
 /** The part of the panel's state the agent needs. */
 export interface ReportedView {
+  /** `all` when the panel shows every store, otherwise the class key in focus. */
   character: string
   filters: { search: string; category: string; lock: string; sort: string }
   selected: { instanceId: string; hash: number; name: string; location: string } | null

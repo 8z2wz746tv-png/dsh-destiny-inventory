@@ -18,7 +18,12 @@ import { dirname, join } from 'node:path'
 
 /** Where the user is looking. */
 export interface ViewContext {
-  /** `hunter` / `warlock` / `titan`. */
+  /**
+   * Which character the user is looking at: `hunter` / `warlock` / `titan`, or
+   * `all` when the panel is wide enough to show every store at once. Reporting a
+   * fixed class key there told the agent "you are looking at the hunter" while the
+   * user was reading all four columns side by side.
+   */
   character: string
   filters: { search: string; category: string; lock: string; sort: string }
   /** The item under the pointer's last click, or null. */
@@ -37,15 +42,35 @@ export interface JournalEntry {
   /** Location key the write aimed at. */
   to: string | null
   /**
-   * `unconfirmed` replaces the plan's original `rolledback`: writes are optimistic
-   * with a read-back, so nothing is ever rolled back — it is resolved or it stays
-   * unknown.
+   * `ok` when the bridge accepted it, `failed` when the response said no.
+   *
+   * There is no `unconfirmed`: a refused write can still have landed, and that is
+   * what `resolution` records once the panel asks. (The plan's `rolledback` went
+   * away when rollbacks did — nothing is ever put back, it is resolved or unknown.)
    */
-  result: 'ok' | 'failed' | 'unconfirmed'
+  result: 'ok' | 'failed'
   /** `ui` for a drag here, `agent-detected` for a change we noticed on read-back. */
   source: 'ui' | 'agent-detected'
   /** Upstream's own words on failure; empty on success. */
   detail: string
+  /**
+   * Set when a read-back later decided what a failed write really did.
+   *
+   * A failed response is not a failed write: Bungie syncs seconds behind, so the
+   * panel asks again and takes the answer. Without this the entry keeps saying
+   * `failed` for a move that landed, and "why did that fail" gets answered with a
+   * reason that never happened.
+   */
+  resolution?: Resolution
+}
+
+/** What a read-back decided about a write the bridge had reported as failed. */
+export interface Resolution {
+  at: number
+  /** True when the item really ended up where the write aimed. */
+  landed: boolean
+  /** Where Bungie says it is; null when the item is gone. */
+  location: string | null
 }
 
 /** How many entries are kept; the plan's number. */
@@ -71,13 +96,20 @@ export class ContextStore {
   /** instanceId → location key, from the last read; the baseline for spotting changes. */
   private lastLocations = new Map<string, string>()
   private readonly journalPath: string
+  private readonly now: () => number
+  /** Lines are written in the order they were queued; concurrent appends do not promise that. */
+  private tail: Promise<void> = Promise.resolve()
 
   /**
    * @param journalPath - where to append the trail; defaults to
    *   `~/.dsh/destiny-workspace/journal.jsonl`.
    */
-  constructor(journalPath = join(homedir(), '.dsh', 'destiny-workspace', 'journal.jsonl')) {
+  constructor(
+    journalPath = join(homedir(), '.dsh', 'destiny-workspace', 'journal.jsonl'),
+    now: () => number = Date.now,
+  ) {
     this.journalPath = journalPath
+    this.now = now
   }
 
   /** Replace the view; the browser sends the whole thing, not a diff. */
@@ -107,7 +139,32 @@ export class ContextStore {
     this.entries.unshift(entry)
     if (this.entries.length > RING_SIZE) this.entries.length = RING_SIZE
     // Fire and forget: a diagnostic trail must never block or fail a write.
-    void this.append(entry)
+    this.emit(entry)
+  }
+
+  /**
+   * Attach a read-back result to the failed write it corrects.
+   *
+   * Only the newest unresolved failure for that instance is touched: an older one
+   * belongs to a write the user already moved past.
+   * @param instanceId - the item the read-back was about.
+   * @param landed - whether it really ended up at the destination.
+   * @param location - where Bungie says it is; null when gone.
+   * @returns the corrected entry, or null when there is nothing to correct.
+   */
+  resolve(instanceId: string, landed: boolean, location: string | null): JournalEntry | null {
+    const entry = this.entries.find(
+      (candidate) =>
+        candidate.item.instanceId === instanceId &&
+        candidate.result === 'failed' &&
+        candidate.resolution === undefined,
+    )
+    if (entry === undefined) return null
+    entry.resolution = { at: this.now(), landed, location }
+    // The trail is append-only: a correction is a second line, never an edit. Read
+    // the file by taking the last line for a given `at`.
+    this.emit(entry)
+    return entry
   }
 
   /** The most recent entries, newest first. */
@@ -120,10 +177,23 @@ export class ContextStore {
     return [...this.entries]
   }
 
-  private async append(entry: JournalEntry): Promise<void> {
+  /**
+   * Echo one entry to disk, serialized right now.
+   *
+   * Not inside the async body: the entry object is mutated later (`resolve` stamps
+   * it), so a write that serialized after awaiting would record a shape that did
+   * not exist when the line was queued — and the original `failed` line would come
+   * out already carrying its own correction.
+   */
+  private emit(entry: JournalEntry): void {
+    const line = `${JSON.stringify(entry)}\n`
+    this.tail = this.tail.then(() => this.append(line))
+  }
+
+  private async append(line: string): Promise<void> {
     try {
       await mkdir(dirname(this.journalPath), { recursive: true })
-      await appendFile(this.journalPath, `${JSON.stringify(entry)}\n`, 'utf8')
+      await appendFile(this.journalPath, line, 'utf8')
     } catch {
       // A missing trail is not a failure of the write it was recording.
     }

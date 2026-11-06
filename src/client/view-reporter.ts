@@ -10,7 +10,7 @@ import type { ReportedView } from './use-view-report'
 
 /**
  * Build the view the agent reads.
- * @param character - the active character key.
+ * @param character - the class key in focus, or `all` when every store is on screen.
  * @param filters - the panel's current filters.
  * @param picked - the clicked row, when there is one.
  * @param dropTarget - where the last drag was aimed.

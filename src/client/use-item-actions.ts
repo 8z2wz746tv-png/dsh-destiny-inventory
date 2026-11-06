@@ -98,7 +98,9 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
         line.settle(false, error instanceof Error ? error.message : String(error))
         // A failed response does not mean the write did not land. Mark the item
         // unknown and ask Bungie, rather than rolling back to a stale snapshot.
-        if (request.kind === 'move') await settleByReadBack(routePath, request.instanceId, patchRows)
+        if (request.kind === 'move') {
+          await settleByReadBack(routePath, request.instanceId, request.destination, patchRows)
+        }
         return null
       }
     },

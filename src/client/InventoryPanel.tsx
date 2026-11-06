@@ -202,7 +202,8 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   // The agent answers "this one" from here.
   const picked = hoverCard.target === null ? undefined : itemById.get(hoverCard.target.id)
-  useViewReport(routePath, viewOf(activeCharacter, filters, picked, dropTarget))
+  // Wide means every store is on screen: saying `hunter` there would be a lie.
+  useViewReport(routePath, viewOf(layout === 'wide' ? 'all' : activeCharacter, filters, picked, dropTarget))
 
   const characterByLocation = useMemo(() => {
     const map = new Map<string, CharacterRow>()

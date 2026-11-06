@@ -217,7 +217,9 @@ export class BungieService {
 
   /** The location key an item is in right now; null when the snapshot lacks it. */
   async locationOf(instanceId: string): Promise<string | null> {
-    return (await this.currentSnapshot()).items.find((e) => e.instanceId === instanceId)?.location ?? null
+    // The snapshot stores a character id for anything a character holds; translate
+    // through the read-back's helper so the journal speaks one vocabulary, not two.
+    return resolveItemState(await this.currentSnapshot(), instanceId)?.location ?? null
   }
 
   /** Where one item is right now (`null` when gone); forces a fresh read. */
