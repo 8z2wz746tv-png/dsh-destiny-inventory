@@ -65,6 +65,7 @@ export async function loadInventory(
   refresh: boolean,
   attempt = 0,
 ): Promise<void> {
+  const startedAt = performance.now()
   const loadId = (loadSeq += 1)
   // A newer load owns the screen now; this one may still finish, but not paint.
   const stale = (): boolean => signal.aborted || loadId !== loadSeq
@@ -80,6 +81,9 @@ export async function loadInventory(
         // Painted, never reconciled: the overlay still wins, the cache never votes.
         const items = applyOverlay(cached.items, deps.pending.all())
         deps.onSnapshot({ ...cached, items }, NO_PROFILE)
+        // Two numbers matter here and nowhere else: when the first rows painted,
+        // and when they were replaced by a real read. Both in the browser's clock.
+        console.info(`[destiny] 缓存上屏 ${Math.round(performance.now() - startedAt)}ms`)
       }
     }
 
@@ -101,6 +105,9 @@ export async function loadInventory(
     )
     const items = applyOverlay(fresh.items, deps.pending.all())
     deps.onSnapshot({ ...fresh, items }, profile)
+    console.info(
+      `[destiny] 最新数据 ${Math.round(performance.now() - startedAt)}ms（${fresh.items.length} 件）`,
+    )
     writeSnapshot(account, fresh)
   } catch (error) {
     if (stale()) return
