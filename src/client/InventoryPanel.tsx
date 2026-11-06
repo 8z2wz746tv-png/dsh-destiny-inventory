@@ -7,13 +7,13 @@ import type {
   ItemRow,
   PlayerProfileView,
 } from '../host/types'
-import { fetchCharacters, fetchInventory, warmDetails } from './api'
+import { warmDetails } from './api'
 import { ItemDetailCard } from './ItemDetail'
 import { DEFAULT_FILTERS, availableTypes, buildSections, emptyShelfSections } from './filter'
 import { InventoryToolbar } from './InventoryToolbar'
 import { useItemActions } from './use-item-actions'
 import { PendingOps } from './pending-ops'
-import { applyOverlay, compareSnapshot } from './pending-ops-render'
+import { loadInventory } from './load-inventory'
 import { Receipts } from './Receipts'
 import { useViewReport } from './use-view-report'
 import { viewOf } from './view-reporter'
@@ -126,23 +126,20 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     return () => controller.abort()
   }, [routePath, state])
 
-  const load = useCallback((signal: AbortSignal, refresh: boolean): Promise<void> => {
-    const issuedAt = Date.now() // before the request: see compareSnapshot
-    return Promise.all([fetchInventory(routePath, signal, refresh), fetchCharacters(routePath, signal)]).then(
-      ([snapshot, profile]) => {
-        if (signal.aborted) return
-        // Agreeing confirms an operation; disagreeing does not undo it. P1.5 will
-        // journal these transitions — for now the overlay is the only consumer.
-        pending.reconcile(compareSnapshot(snapshot.items, pending.all(), issuedAt), Date.now())
-        const items = applyOverlay(snapshot.items, pending.all())
-        setState({ kind: 'ready', snapshot: { ...snapshot, items }, profile })
-      },
-      (error: unknown) => {
-        if (signal.aborted) return
-        setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
-      },
-    )
-  }, [pending, routePath])
+  const load = useCallback(
+    (signal: AbortSignal, refresh: boolean): Promise<void> =>
+      loadInventory(
+        {
+          routePath,
+          pending,
+          onSnapshot: (snapshot, profile) => setState({ kind: 'ready', snapshot, profile }),
+          onError: (message) => setState({ kind: 'error', message }),
+        },
+        signal,
+        refresh,
+      ),
+    [pending, routePath],
+  )
 
   useEffect(() => {
     const controller = new AbortController()

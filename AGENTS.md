@@ -175,6 +175,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/host/bungie-service.ts` | 数据服务：快照、详情、角标、状态。**贴着 305 上限**，只做组合。 |
 | `src/host/snapshot-cache.ts` | 快照三态：`current`（读者）/ `stable`（写者）/ `markStale`。写者读陈旧不是降级，是它们要的值不会变。 |
 | `src/host/dto.ts` | 线格式转换：物品行、角色行、账号头。稀有度与装备三态的口径都在这里。 |
+| `src/host/item-sources.ts` | profile 行 → `ItemSource`（`dto` 在 258 上限上，这件事挪出来）。 |
 | `src/host/item-detail.ts` | 详情卡组装：插槽候选、属性行、击杀数、固有效果。 |
 | `src/host/details-bulk.ts` | 一次性构建全部详情（1924 件 ≈2.8 秒），给前端一个请求预热。 |
 | `src/host/stat-order.ts` | DIM 的属性白名单与顺序（照搬 `itemStatAllowList`）。**护甲六维不走这里**。 |
@@ -207,6 +208,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/send-action.ts` | 一次写从发出到落定：接受/拒绝/不明三路分流。**拒绝恢复原位，不明才回读**。 |
 | `src/client/apply-move.ts` | 乐观移动：`applyMove`/`settleMove`/`confirmMove`/`applyLock`。 |
 | `src/client/settle-by-readback.ts` | 失败后按 Bungie 的真实位置落定，不回滚到可能已经过期的快照。 |
+| `src/client/load-inventory.ts` | 三段加载：**先问账号** → 画缓存（只叠 overlay，不核验）→ 网络回来才 reconcile 并写缓存。**loadId 代次 + 账号比对**，旧的/别家的响应不许上屏。 |
 | `src/client/snapshot-db.ts` | 浏览器里留一份上次的库存（**按账号分键**）。只负责存，不负责核验；任何失败都降级成"没有缓存"。 |
 | `src/client/api.ts` | 桥接请求 + 详情缓存（promise 与已解析值两份）。**浏览器唯一出口**。 |
 | `src/client/use-receipts.ts` | 回执栈：5 秒自动消失、可取消、排队中改文案。 |

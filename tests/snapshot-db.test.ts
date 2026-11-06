@@ -12,7 +12,15 @@ const steam = { membershipType: 3, membershipId: '4611686018492803873' }
 const psn = { membershipType: 2, membershipId: '4611686018492803873' }
 
 const snapshot = (over: Partial<InventorySnapshot> = {}): InventorySnapshot =>
-  ({ fetchedAt: 1_700_000_000_000, total: 2, items: [], truncated: false, overlays: {} as never, ...over })
+  ({
+    account: steam,
+    fetchedAt: 1_700_000_000_000,
+    total: 2,
+    items: [],
+    truncated: false,
+    overlays: {} as never,
+    ...over,
+  })
 
 const record = (over: Record<string, unknown> = {}) => ({
   schema: 1,

@@ -48,6 +48,14 @@ export interface CharacterRow {
 }
 
 /** The player header the view renders above the character buckets. */
+/** The minimum needed to name an account. */
+export interface AccountIdentity {
+  /** Platform type: 1 Xbox, 2 PSN, 3 Steam, 6 Epic. */
+  membershipType: number
+  /** Platform membership id — not the Bungie.net id. */
+  membershipId: string
+}
+
 export interface PlayerProfileView {
   displayName: string
   membershipId: string
@@ -139,6 +147,14 @@ export interface ItemRow {
 
 /** One cached read of the whole account inventory. */
 export interface InventorySnapshot {
+  /**
+   * Whose vault this is.
+   *
+   * Carried on every read so the browser can prove the data belongs to the account
+   * it asked about: `/account` and `/inventory` are two requests, and a switch
+   * between them would otherwise let one account's rows land in another's cache.
+   */
+  account: AccountIdentity
   /** Epoch milliseconds of the read that produced this snapshot. */
   fetchedAt: number
   /** How many items the account holds in total. */

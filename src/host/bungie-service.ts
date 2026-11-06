@@ -23,8 +23,9 @@ import type { ProfileSnapshot } from '../bungie/profile'
 import { FileTokenProvider } from '../bungie/token-file-provider'
 import { AuthUnavailableError } from '../bungie/types'
 import { CLASS_LOCATION, toItemRows, toProfileView } from './dto'
-import type { DefinitionLookup, ItemSource } from './dto'
-import type { InventorySnapshot, ItemDetailView, PlayerProfileView } from './types'
+import { toItemSources } from './item-sources'
+import type { DefinitionLookup } from './dto'
+import type { AccountIdentity, InventorySnapshot, ItemDetailView, PlayerProfileView } from './types'
 
 
 export interface BungieServiceOptions {
@@ -162,33 +163,32 @@ export class BungieService {
     return toProfileView(snapshot, (hash) => this.store().titleName(hash))
   }
 
+  /**
+   * Which account this bridge is signed in as.
+   *
+   * Deliberately does NOT read the profile: the browser calls this before it may
+   * paint a cached snapshot, so it has to answer from the membership endpoint and
+   * its cache, not from a 7–15 second profile read.
+   */
+  async identity(): Promise<AccountIdentity> {
+    const membership = await this.currentMembership()
+    return { membershipType: membership.membershipType, membershipId: membership.membershipId }
+  }
+
   /** Full inventory snapshot in the bridge's wire shape. */
   async inventory(options: { force?: boolean } = {}): Promise<InventorySnapshot> {
     const snapshot = await this.currentSnapshot(options.force === true)
     const classByCharacter = new Map<string, string>(
       snapshot.characters.map((character) => [character.characterId, CLASS_LOCATION[character.classType] ?? '']),
     )
-    const sources: ItemSource[] = snapshot.items.map((item) => ({
-      key: item.key,
-      instanceId: item.instanceId,
-      itemHash: item.itemHash,
-      slotHash: item.slotHash,
-      quantity: item.quantity,
-      source: item.source,
-      characterId: item.characterId,
-      locked: item.locked,
-      power: item.power,
-      gearTier: item.gearTier ?? 0,
-      crafted: item.crafted,
-      masterwork: item.masterwork,
-    }))
+    const sources = toItemSources(snapshot.items)
     const { rows } = toItemRows(
       sources,
       this.definitions(),
       classByCharacter,
       snapshot.equippedCharacters,
     )
-    return { fetchedAt: this.now(), total: rows.length, items: rows, truncated: false }
+    return { account: await this.identity(), fetchedAt: this.now(), total: rows.length, items: rows, truncated: false }
   }
 
   /**

@@ -121,16 +121,8 @@ export function apply(ctx: Context, config: ConfigShape): void {
         return
       }
       try {
-        if (query === '/characters') {
-          const data = await service.characters()
-          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
-          return
-        }
-        if (query === '/status') {
-          const data = await service.status()
-          sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
-          return
-        }
+        if (query === '/characters') return sendJson(res, 200, { ok: true, data: await service.characters() } satisfies BridgeResponse<unknown>)
+        if (query === '/status') return sendJson(res, 200, { ok: true, data: await service.status() } satisfies BridgeResponse<unknown>)
         if (query === '/item') {
           const id = url.searchParams.get('id') ?? ''
           if (id === '') {
@@ -171,10 +163,13 @@ export function apply(ctx: Context, config: ConfigShape): void {
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }
+        // Identity only, and never from the profile: the browser must know whose
+        // cache to read before it may paint anything.
+        if (query === '/account') return sendJson(res, 200, { ok: true, data: await service.identity() } satisfies BridgeResponse<unknown>)
         if (query === '/inventory') {
           const data = await service.inventory({ force: url.searchParams.get('refresh') === '1' })
-          // Note anything that moved without a matching journal entry. The agent
-          // can change the account through the MCP; this is how the panel finds out.
+          // Note anything that moved without a matching journal entry (the agent can
+          // change the account through the MCP); this is how the panel finds out.
           detector.observe(context, data.items)
           sendJson(res, 200, {
             ok: true,

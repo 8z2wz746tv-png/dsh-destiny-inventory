@@ -1,4 +1,5 @@
 import type {
+  AccountIdentity,
   ActionReceipt,
   ActionRequest,
   BridgeResponse,
@@ -53,6 +54,12 @@ export async function readBridge<T>(url: string, signal: AbortSignal): Promise<T
  * @param routePath - bridge base pathname, as configured on the host half.
  * @param signal - caller-owned cancellation.
  */
+/** Which account the bridge is signed in as. Cheap on purpose: the panel must know
+ * whose cache to read before it may paint, not after a profile read. */
+export function fetchAccount(routePath: string, signal: AbortSignal): Promise<AccountIdentity> {
+  return readBridge<AccountIdentity>(`${routePath}/account`, signal)
+}
+
 export function fetchCharacters(routePath: string, signal: AbortSignal): Promise<PlayerProfileView> {
   return readBridge<PlayerProfileView>(`${routePath}/characters`, signal)
 }
