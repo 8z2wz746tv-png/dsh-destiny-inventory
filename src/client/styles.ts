@@ -72,6 +72,12 @@ const CSS = `
 }
 .dsh-destiny-toolbar__refresh:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-destiny-toolbar__refresh:disabled { opacity: 0.5; cursor: default; }
+.dsh-destiny-toolbar__updated {
+  font-size: 11px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
 .dsh-destiny-toolbar__count { margin-inline-start: auto; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
 
 .dsh-destiny-segmented { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--dsw-alias-bg-layer-2); }

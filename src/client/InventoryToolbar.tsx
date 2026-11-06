@@ -46,6 +46,8 @@ export function InventoryToolbar({
   onRefresh,
 }: InventoryToolbarProps): ReactElement {
   const [refreshing, setRefreshing] = useState(false)
+  /** When the last successful refresh landed; the only proof the button did anything. */
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   return (
     <div className="dsh-destiny-toolbar">
@@ -108,11 +110,17 @@ export function InventoryToolbar({
         onClick={() => {
           // A cold refresh takes seconds; without this the button looks dead.
           setRefreshing(true)
-          void onRefresh().finally(() => setRefreshing(false))
+          void onRefresh().finally(() => {
+            setRefreshing(false)
+            setUpdatedAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+          })
         }}
       >
         {refreshing ? '刷新中…' : '刷新'}
       </button>
+      {updatedAt !== null && !refreshing && (
+        <span className="dsh-destiny-toolbar__updated">{updatedAt} 更新</span>
+      )}
       <span className="dsh-destiny-toolbar__count">{countLabel}</span>
       <span className="dsh-destiny-build" title="当前加载的插件版本">
         v{__PLUGIN_VERSION__}
