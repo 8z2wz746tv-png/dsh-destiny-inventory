@@ -72,7 +72,7 @@ describe('runItemWrite', () => {
   it('resolves a location key to the character id Bungie wants', async () => {
     const post = vi.fn(async () => ({}))
     const d = deps(post)
-    await runItemWrite(d, { kind: 'move', instanceId: 'i1', characterId: 'hunter' })
+    await runItemWrite(d, { kind: 'move', instanceId: 'i1', characterId: 'hunter', from: 'vault' })
     const body = (post.mock.calls[0] as unknown as [string, { characterId: string }])[1]
     // `hunter` is not an id; sending it comes back as "unexpected problem decoding"
     expect(body.characterId).toBe('char-hunter')
@@ -103,5 +103,31 @@ describe('runItemWrite', () => {
     // Guessing is worse than failing: say what is missing.
     await expect(runItemWrite(deps(post), { kind: 'move', instanceId: 'i1' })).rejects.toThrow('from')
     expect(post).not.toHaveBeenCalled()
+  })
+
+  it('routes a character-to-character move through the vault', async () => {
+    const post = vi.fn(async () => ({}))
+    const d = deps(post, [{ instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' }])
+    const summary = await runItemWrite(d, {
+      kind: 'move',
+      instanceId: 'i1',
+      characterId: 'warlock',
+      from: 'hunter',
+    })
+    // Injectable violation: send one transfer and Bungie answers 1623
+    // `DestinyItemNotFound`, which reads like missing data and is not.
+    expect(post).toHaveBeenCalledTimes(2)
+    const calls = post.mock.calls as unknown as [string, { transferToVault: boolean; characterId: string }][]
+    expect(calls[0]?.[1].transferToVault).toBe(true)
+    expect(calls[0]?.[1].characterId).toBe('char-hunter')
+    expect(calls[1]?.[1].transferToVault).toBe(false)
+    expect(calls[1]?.[1].characterId).toBe('char-warlock')
+    expect(summary).toContain('经仓库中转')
+  })
+
+  it('takes out of the vault in a single hop', async () => {
+    const post = vi.fn(async () => ({}))
+    await runItemWrite(deps(post), { kind: 'move', instanceId: 'i1', characterId: 'hunter', from: 'vault' })
+    expect(post).toHaveBeenCalledTimes(1)
   })
 })

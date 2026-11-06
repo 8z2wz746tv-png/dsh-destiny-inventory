@@ -6,9 +6,9 @@
  */
 import type { BungieClient } from '../bungie/client'
 import type { ProfileSnapshot } from '../bungie/profile'
-import { CLASS_LOCATION } from './dto'
 import { BridgeFault } from './http'
-import { equipItem, pullFromPostmaster, setLockState, transferItem } from '../bungie/write'
+import { idOf, moveItem } from './move-item'
+import { equipItem, pullFromPostmaster, setLockState } from '../bungie/write'
 import type { ItemWrite, WriteTarget } from '../bungie/write'
 
 /** What a write needs from the service. */
@@ -60,23 +60,9 @@ export async function runItemWrite(deps: WriteDeps, write: ItemWrite): Promise<s
     deps.invalidate()
     return '已从邮政官取回'
   }
-  // Banking names the character the item is leaving. That used to come from the
-  // snapshot, which lags: Bungie syncs writes seconds later, so a queued move could
-  // name the character the item *used* to be on. The panel knows; take its word and
-  // refuse rather than guess when it is missing.
-  if (write.characterId === undefined) {
-    if (write.from === undefined) throw new BridgeFault('BadRequest', '存进仓库需要知道物品现在在哪个角色（from），这次请求没带')
-    const owner = await idOf(deps.snapshot, write.from)
-    if (owner === undefined) throw new BridgeFault('BadRequest', '找不到这件物品所属的角色，请刷新后再试')
-    await transferItem(client, target, instanceId, item.itemHash, true, owner)
-    deps.invalidate()
-    return '已存入仓库'
-  }
-  const destination = await idOf(deps.snapshot, write.characterId)
-  if (destination === undefined) throw new BridgeFault('BadRequest', '找不到目标角色，请刷新后再试')
-  await transferItem(client, target, instanceId, item.itemHash, false, destination)
+  const summary = await moveItem(client, target, deps.snapshot, write, item.itemHash)
   deps.invalidate()
-  return '已移到角色背包'
+  return summary
 }
 
 /** Which character holds this instance right now. */
@@ -108,20 +94,3 @@ async function activeCharacter(snapshot: () => Promise<ProfileSnapshot>): Promis
   return played[0]?.characterId
 }
 
-/**
- * Resolve a location key (`hunter`) to the character id Bungie wants.
- *
- * The bridge's vocabulary is location keys; the action endpoints take ids. Passing
- * one where the other belongs comes back as "unexpected problem decoding", which
- * says nothing about the real mistake.
- * @param snapshot - the current profile.
- * @param location - `hunter` / `warlock` / `titan`, or an id that needs no lookup.
- * @returns the character id, or undefined when no character matches.
- */
-async function idOf(snapshot: () => Promise<ProfileSnapshot>, location: string): Promise<string | undefined> {
-  const current = await snapshot()
-  const byKey = current.characters.find((character) => CLASS_LOCATION[character.classType] === location)
-  if (byKey !== undefined) return byKey.characterId
-  // Already an id (the client sometimes knows it); accept it as-is.
-  return current.characters.some((character) => character.characterId === location) ? location : undefined
-}
