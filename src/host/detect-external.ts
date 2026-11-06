@@ -25,20 +25,22 @@ import type { ItemRow } from './types'
 /**
  * How long a difference has to stay put before it counts.
  *
- * Bungie's write-to-read lag was measured at 3–10 s; the upper end is the useful
- * number, because anything shorter can still be a projection catching up.
+ * Measured on this account, 2026-11-06: `TransferItem` returned ok, and the profile
+ * kept reporting the old location for **56 s**, flipping at 64 s. The number in
+ * MEMORY (3–10 s) came from `EquipItem` in the MCP project and is far too short
+ * here — trusting it would confirm a mid-sync position as a real change.
+ *
+ * 90 s is that window with margin. A real external change shows up a minute and a
+ * half late, which is the right trade here: late beats wrong.
  */
-const SETTLE_MS = 10_000
+export const SETTLE_MS = 90_000
 
 /** Stop tracking a candidate nobody has re-read for this long. */
 const GIVE_UP_MS = 5 * 60_000
 
 /**
- * How far back a local write still explains a position.
- *
- * The panel's own write puts the item somewhere; when a later read finally agrees,
- * that is the write landing, not someone else acting. The window is generous
- * because the sync lag is, and a false "external" is worse than a missed one.
+ * How far back a local write still explains a position: the panel put it somewhere,
+ * and a later read agreeing is that write landing, not someone else acting.
  */
 const OWN_OPERATION_MS = 30 * 60_000
 

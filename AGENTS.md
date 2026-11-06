@@ -187,7 +187,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/host/item-state-route.ts` | 单件位置。**从强制刷新的 profile 读**——`.../Item/{id}/` 从不回 characterId。 |
 | `src/host/journal-record.ts` | 一次写入 → 一条 journal 记录（含 `from`/`to` 映射）。 |
 | `src/host/context-store.ts` | 面板当前视图 + 200 条 journal，落盘 jsonl，**启动时读回**（否则重启一次"刚才那件"就没了）。给 agent 读，不给 agent 写。 |
-| `src/host/detect-external.ts` | **观测到的**外部变更：位置差异先进候选，扛过同步窗口才记事件，来源只写 `external`，不推断是谁。基线只在稳定时前进。 |
+| `src/host/detect-external.ts` | **观测到的**外部变更：位置差异先进候选，扛过同步窗口（实测 56–64 秒，取 90）才记事件，来源只写 `external`，不推断是谁。基线只在稳定时前进。 |
 | `src/host/agent-tools.ts` | 两个只读工具 `destiny_workspace_*`：回答"这件""刚刚"。只读是设计，不是还没做。 |
 | `src/host/http.ts` | `sendJson` / `readJsonBody` / `BridgeFault` / `toFailure` / `statusOf`。**错误码与 HTTP 状态的唯一出口**。 |
 

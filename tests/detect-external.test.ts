@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ContextStore } from '../src/host/context-store'
-import { ExternalDetector } from '../src/host/detect-external'
+import { ExternalDetector, SETTLE_MS } from '../src/host/detect-external'
 import type { JournalEntry } from '../src/host/context-store'
 import type { ItemRow } from '../src/host/types'
 
@@ -67,7 +67,7 @@ describe('external change detection', () => {
     const detector = new ExternalDetector()
     detector.observe(s, [row({})], 0)
     detector.observe(s, [row({ locationKey: 'vault' })], 1_000)
-    detector.observe(s, [row({ locationKey: 'vault' })], 12_000)
+    detector.observe(s, [row({ locationKey: 'vault' })], 1_000 + SETTLE_MS * 1.2)
     const [entry] = external(s)
     expect(entry?.from).toBe('hunter')
     expect(entry?.to).toBe('vault')
@@ -79,10 +79,10 @@ describe('external change detection', () => {
     const detector = new ExternalDetector()
     detector.observe(s, [row({})], 0)
     detector.observe(s, [row({ locationKey: 'vault' })], 1_000) // candidate starts
-    detector.observe(s, [row({ locationKey: 'vault' })], 5_000) // 4 s later: too soon
+    detector.observe(s, [row({ locationKey: 'vault' })], 1_000 + SETTLE_MS * 0.4) // still inside the window
     // Injectable violation: drop the settle check and this becomes one entry.
     expect(external(s)).toHaveLength(0)
-    detector.observe(s, [row({ locationKey: 'vault' })], 12_000) // 11 s: settled
+    detector.observe(s, [row({ locationKey: 'vault' })], 1_000 + SETTLE_MS * 1.2) // past the window
     expect(external(s)).toHaveLength(1)
   })
 
@@ -91,7 +91,7 @@ describe('external change detection', () => {
     const detector = new ExternalDetector()
     detector.observe(s, [row({})], 0)
     detector.observe(s, [row({ locationKey: 'vault' })], 1_000)
-    detector.observe(s, [row({ locationKey: 'vault' })], 12_000)
+    detector.observe(s, [row({ locationKey: 'vault' })], 1_000 + SETTLE_MS * 1.2)
     // Injectable violation: attribute it to an agent and the journal states a
     // cause the panel cannot know.
     expect(external(s)[0]?.source).toBe('external')
@@ -116,7 +116,7 @@ describe('external change detection', () => {
     detector.observe(s, [row({ locationKey: 'warlock' })], 12_000) // new candidate
     // Only two observations, and the second one restarted the clock.
     expect(external(s)).toHaveLength(0)
-    detector.observe(s, [row({ locationKey: 'warlock' })], 25_000)
+    detector.observe(s, [row({ locationKey: 'warlock' })], 1_000 + SETTLE_MS * 3)
     expect(external(s)).toHaveLength(1)
   })
 
@@ -126,7 +126,7 @@ describe('external change detection', () => {
     detector.observe(s, [row({ locationKey: 'vault' })], 0)
     ownWrite(s, 'vault', 'warlock', 1_000)
     detector.observe(s, [row({ locationKey: 'warlock' })], 2_000)
-    detector.observe(s, [row({ locationKey: 'warlock' })], 15_000)
+    detector.observe(s, [row({ locationKey: 'warlock' })], 2_000 + SETTLE_MS * 1.2)
     // Injectable violation: match on "recent ui write" alone and the reverse (the
     // mid-sync read below) also gets swallowed — but matching on destination is
     // what makes this one right.
@@ -140,7 +140,7 @@ describe('external change detection', () => {
     ownWrite(s, 'vault', 'warlock', 1_000)
     // Our write aimed at warlock; the item turns up on the hunter instead.
     detector.observe(s, [row({ locationKey: 'hunter' })], 2_000)
-    detector.observe(s, [row({ locationKey: 'hunter' })], 15_000)
+    detector.observe(s, [row({ locationKey: 'hunter' })], 2_000 + SETTLE_MS * 1.2)
     expect(external(s)).toHaveLength(1)
   })
 })
@@ -158,7 +158,7 @@ describe('the sync mid-state sequence from the P0 run', () => {
     detector.observe(s, [row({ locationKey: 'vault' })], 2_000)
     // T4/T5: sync completes, the read finally agrees with the write.
     detector.observe(s, [row({ locationKey: 'warlock' })], 20_000)
-    detector.observe(s, [row({ locationKey: 'warlock' })], 40_000)
+    detector.observe(s, [row({ locationKey: 'warlock' })], 20_000 + SETTLE_MS * 1.2)
 
     expect(s.all()).toHaveLength(1)
     expect(s.all()[0]?.source).toBe('ui')
