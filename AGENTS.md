@@ -260,6 +260,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 - `docs/plans/PLAN-WRITE-QUEUE.md` — 动写入路径之前看它：两层串行的理由、`from` 为什么必填、真机验证记录、撞出来的两个问题。
 - `docs/plans/PLAN-OPERATION-EVENTS.md` — 动 journal 形状（事件模型、`submitted`、`verified`）之前看它：P1.2–P1.5 的地基与三项待拍板。
 - `docs/plans/PLAN-CONSISTENCY-LAYER.md` — **动面板的写入/刷新/核验之前看它**：四套状态各是什么、Pending Overlay 的两条硬约束、七个端到端场景。设计稿，未实施。
+- `docs/plans/PLAN-LOCAL-CACHE.md` — **动前端加载/缓存之前看它**：实测上游 0.6–15 秒、DIM 靠缓存不等、加一层 IndexedDB 的取舍与验收。设计稿，未实施。
 - `docs/plans/PLAN-AGENT-CONTEXT.md` — 动 agent 层（工具、journal、`/context`）之前看它：P3 的规格与被砍掉的自动摘要。
 - `docs/plans/PLAN-SEARCH.md` — 要做搜索之前看它：中文名 + perk 名，**明确不引 DIM 的 152 个关键词**。
 - `docs/plans/GROUPING_PLAN.md` — 动分组/分行之前看它：行 = 桶、分段在 vault 格内部；已实现（v0.42.9），留作依据。
