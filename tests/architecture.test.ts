@@ -39,6 +39,7 @@ describe('module size', () => {
     'src/host/action-route.ts': 60,
     'src/host/item-state-route.ts': 45,
     'src/host/context-store.ts': 240,
+    'src/host/detect-external.ts': 180,
     'src/bungie/profile.ts': 340,
     'src/host/stat-lines.ts': 80,
     'src/bungie/values.ts': 30,

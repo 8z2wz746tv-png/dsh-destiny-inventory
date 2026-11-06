@@ -50,8 +50,12 @@ export interface JournalEntry {
    * away when rollbacks did — nothing is ever put back, it is resolved or unknown.)
    */
   result: 'ok' | 'failed'
-  /** `ui` for a drag here, `agent-detected` for a change we noticed on read-back. */
-  source: 'ui' | 'agent-detected'
+  /**
+   * `ui` for a write this panel made; `external` for a change it only observed —
+   * without saying who, because the panel cannot tell an agent's MCP write from
+   * another client's, and guessing is how a sync artefact became a "move".
+   */
+  source: 'ui' | 'external'
   /** Upstream's own words on failure; empty on success. */
   detail: string
   /**

@@ -40,7 +40,7 @@ export function registerAgentTools(ctx: Context, store: ContextStore): void {
     defineTool({
       name: 'destiny_workspace_journal',
       description:
-        'Recent writes made through the panel: what moved, from where to where, whether it succeeded, and the upstream reason when it failed. Use this for "just now" / "我刚拖的那件" / "刚才为什么失败".',
+        'Recent writes made through the panel: what moved, from where to where, whether it succeeded, and the upstream reason when it failed. Entries with source "external" are changes the panel observed but did not make — it does not know who made them, so do not attribute them to the user or to yourself. A "resolution" field means the failed write was later checked against Bungie. Use this for "just now" / "我刚拖的那件" / "刚才为什么失败".',
       parameters: {
         limit: { type: 'number', description: 'How many entries, default 20, max 200.' },
       },

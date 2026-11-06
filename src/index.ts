@@ -15,7 +15,7 @@ import { runAction } from './host/action-route'
 import { handleJournalResolve } from './host/journal-resolve-route'
 import { readJsonBody, sendJson, statusOf, toFailure } from './host/http'
 import { WriteSerializer } from './host/serialize-writes'
-import { detectExternal } from './host/detect-external'
+import { ExternalDetector } from './host/detect-external'
 import type { ActionRequest, BridgeResponse } from './host/types'
 
 export const name = 'dsh-destiny-inventory'
@@ -46,8 +46,8 @@ export function apply(ctx: Context, config: ConfigShape): void {
   // What the panel is showing and what has been done through it; the agent reads
   // this, it never writes through it.
   const context = new ContextStore(config.journalPath)
-  // One write at a time on this route, whatever asks for it.
-  const writes = new WriteSerializer()
+  const writes = new WriteSerializer() // one write at a time, whoever asks
+  const detector = new ExternalDetector()
   registerAgentTools(ctx, context)
   ctx.webServer.register({
     kind: 'prefix',
@@ -175,7 +175,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
           const data = await service.inventory({ force: url.searchParams.get('refresh') === '1' })
           // Note anything that moved without a matching journal entry. The agent
           // can change the account through the MCP; this is how the panel finds out.
-          detectExternal(context, data.items)
+          detector.observe(context, data.items)
           sendJson(res, 200, {
             ok: true,
             data: { ...data, overlays: service.overlays() },
