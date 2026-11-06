@@ -261,6 +261,10 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 - `docs/plans/PLAN-SEARCH.md` — 要做搜索之前看它：中文名 + perk 名，**明确不引 DIM 的 152 个关键词**。
 - `docs/plans/GROUPING_PLAN.md` — 动分组/分行之前看它：行 = 桶、分段在 vault 格内部；已实现（v0.42.9），留作依据。
 
+### 测试记录（`docs/testing/`）：怎么验、验到哪
+
+- `docs/testing/P1-CONSISTENCY-ACCEPTANCE.md` — **做一致性层的真机验收之前看它**：六项场景怎么造、看什么、什么算通过，以及哪些还没验。
+
 ### 调研与提案（`docs/research/`）：看了什么、差在哪、向别人要什么
 
 - `docs/research/DIM-GAP-ANALYSIS.md` — 决定下一步做什么之前看它：DIM 有什么我们没有（2026-11-06 普查）。
