@@ -112,6 +112,15 @@ describe('retired paths stay retired', () => {
   })
 })
 
+describe('the agent reads what is on screen', () => {
+  it('tells the agent that a wide panel is showing every store', () => {
+    // `activeCharacter` never leaves `hunter` in wide layout: it is the state that
+    // only medium/narrow use to pick a column.
+    const panel = readFileSync(join(SRC, 'client/InventoryPanel.tsx'), 'utf8')
+    expect(panel).toContain("layout === 'wide' ? 'all' : activeCharacter")
+  })
+})
+
 describe('dependency direction', () => {
   /** A layer may only import from the layers below it. */
   const LAYER: Record<string, number> = { client: 3, host: 1, bungie: 0 }
