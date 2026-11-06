@@ -118,6 +118,26 @@ describe('pending operations', () => {
     expect(ops.get('i1')?.mismatches).toBe(0)
   })
 
+  it('read issued at 1000, drag at 1001, read returns 1002: cannot confirm', () => {
+    const ops = new PendingOps()
+    ops.submit(op({ now: 1_001 }))
+    ops.settle('e1', 'accepted')
+    // The read started before the drag existed, so whatever it saw predates it.
+    const transitions = ops.reconcile([{ instanceId: 'i1', location: 'warlock', startedAt: 1_000 }], 1_002)
+    expect(transitions).toEqual([])
+    expect(ops.size).toBe(1)
+  })
+
+  it('drag at 1000, read issued at 1001, read returns 1002: may confirm', () => {
+    const ops = new PendingOps()
+    ops.submit(op({ now: 1_000 }))
+    ops.settle('e1', 'accepted')
+    // Issued strictly after the drag: it could only have seen the new state.
+    const transitions = ops.reconcile([{ instanceId: 'i1', location: 'warlock', startedAt: 1_001 }], 1_002)
+    expect(transitions).toEqual([{ eventId: 'e1', instanceId: 'i1', kind: 'verified', location: 'warlock' }])
+    expect(ops.size).toBe(0)
+  })
+
   it('lets an old read-back describe a newer operation without repainting it', () => {
     const ops = new PendingOps()
     ops.submit(op({ eventId: 'a', target: 'warlock', now: 1_000 })) // A: vault → warlock
