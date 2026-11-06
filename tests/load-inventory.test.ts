@@ -204,4 +204,26 @@ describe('account and load identity', () => {
     expect(h.errors[0]).toContain('token expired')
     expect(db.readSnapshot).not.toHaveBeenCalled()
   })
+
+  it('still paints the rows when only the character list fails', async () => {
+    const h = harness()
+    // Seen live: the host was still starting, `/characters` answered 502, and the
+    // whole load failed even though the items themselves were fine.
+    api.fetchCharacters.mockRejectedValue(new Error('502 Bad Gateway'))
+    await loadInventory(h.deps, signal(), false)
+    expect(h.errors).toHaveLength(0)
+    expect(h.painted).toHaveLength(1)
+    expect(h.painted[0]?.characters).toEqual([])
+    expect(db.writeSnapshot).toHaveBeenCalled()
+  })
+
+  it('still fails when the items themselves fail', async () => {
+    const h = harness()
+    api.fetchInventory.mockRejectedValue(new Error('502 Bad Gateway'))
+    await loadInventory(h.deps, signal(), false)
+    // Injectable violation: swallow this too and the panel shows rows that were
+    // never refreshed, with no indication anything went wrong.
+    expect(h.painted).toHaveLength(0)
+    expect(h.errors).toHaveLength(1)
+  })
 })

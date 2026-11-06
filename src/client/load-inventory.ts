@@ -87,10 +87,17 @@ export async function loadInventory(
       }
     }
 
-    const [fresh, profile] = await Promise.all([
+    // `allSettled`, not `all`: the character list is decoration next to the items,
+    // and a 502 on it must not cost the user a whole refresh. Seen live — the host
+    // was still starting, `/characters` answered 502, and the whole load failed with
+    // fresh rows already on the wire.
+    const [inventoryResult, charactersResult] = await Promise.allSettled([
       fetchInventory(deps.routePath, signal, refresh),
       fetchCharacters(deps.routePath, signal),
     ])
+    if (inventoryResult.status === 'rejected') throw inventoryResult.reason
+    const fresh = inventoryResult.value
+    const profile = charactersResult.status === 'fulfilled' ? charactersResult.value : NO_PROFILE
     if (stale()) return
     if (!sameAccount(fresh.account, account)) {
       // The account moved under this load; its rows belong to nobody on screen.
