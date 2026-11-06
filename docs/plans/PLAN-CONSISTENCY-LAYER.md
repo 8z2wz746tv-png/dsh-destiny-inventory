@@ -20,36 +20,61 @@ profile 有 56–64 秒仍报旧位置。于是同一个「位置」在四个地
 不是 `instanceId → destination` 的 Map，是一个带序号和生命周期的状态层。
 
 ```ts
+export type OperationState =
+  | 'submitted'    // 已提交，等桥接回答
+  | 'succeeded'    // 桥接明确接受，位置尚未确认
+  | 'verifying'    // 等观测确认（明确成功后、或结果不明时进入）
+  | 'failed'       // 明确拒绝，确定没执行
+  | 'unknown'      // 结果不明或超期未确认
+  | 'verified'     // 确认到位
+  | 'superseded'   // 已被更新的可信观测取代，不再控制渲染
+
 export interface PendingOperation {
-  /** 这次操作的标识；核验回调靠它认领结果。 */
   eventId: string
   /** 同一 instanceId 上的单调序号，晚的覆盖早的。 */
   seq: number
   instanceId: string
   action: 'move' | 'equip' | 'lock'
-  /** 面板认为它现在应该在哪（位置键）。 */
   target: string
-  /** 从哪来，写 journal 用。 */
   from: string | null
-  state: 'submitted' | 'succeeded' | 'verifying' | 'unknown'
+  state: OperationState
   submittedAt: number
-  /** 最近一次核验尝试的时刻。 */
   checkedAt: number
+  /** 超过这个时刻仍未一致 → unknown。 */
+  expiresAt: number
+  /** 连续多少次观测与 target 不一致，用来识别 superseded。 */
+  mismatches: number
 }
 ```
 
 ### 状态机
 
 ```
-submitted ──桥接返回 ok──→ succeeded ──开始核验──→ verifying
-    │                          │                      │
-    └──桥接返回失败────────────┴──────────────────────┤
-                                                      ↓
-                                          位置与 target 一致 → verified（移除 overlay）
-                                          多次仍不一致 / 超期 → unknown（保留，带标记）
+submitted ─┬─ 桥接明确接受 ──→ succeeded ──受观测驱动──→ verifying
+           ├─ 桥接明确拒绝 ──→ failed      （移除 overlay，确定没落地）
+           └─ 超时/断连 ────→ verifying   （不知道落没落，只能等观测）
+
+verifying ─┬─ 观测与 target 一致 ──→ verified   （移除）
+           ├─ 超期仍不一致 ────────→ unknown    （保留，带标记）
+           └─ unknown 后又稳定地不一致 → superseded（不再控制渲染）
 ```
 
-只有 `verified` 会让 overlay 消失。`unknown` **不移除**——移除等于假装它成功了。
+**`failed` 和 `unknown` 不是一回事。** 前者是「Bungie 说没做成，且这个拒绝能确定它没执行」，
+后者是「根本不知道」。把它们并成一个状态，等于把一次超时当成一次失败——这正是 P0 那轮
+「失败但实际落地」的另一面。
+
+`failed` 之后仍然**可以**被回读翻案（记 `verified`），但那一刻 overlay 已经不在渲染里，
+翻案只进 journal。这条是为了保留「上游说没成、实际成了」这种情况的痕迹。
+
+### 判「明确拒绝」还是「结果不明」
+
+看桥接回来的 `error.code`，不看 HTTP 状态码本身：
+
+| code | 判定 | 依据 |
+|---|---|---|
+| `BadRequest` / `NotFound` / `AUTH_UNAVAILABLE` | 明确拒绝 | 请求根本没送到 Bungie 的业务逻辑 |
+| `Destiny*`（上游 `errorStatus`） | 明确拒绝 | Bungie 说不行，例如 `DestinyNoRoomInDestination` |
+| 网络中断、`AbortError`、未知 code、`UPSTREAM` | **结果不明** | 请求可能已经到了 Bungie 并执行 |
 
 ### 两条硬约束
 
@@ -64,19 +89,55 @@ A 的回读如果最后才返回、说「它在术士」，**不能**把 UI 从�
 核验回调先比对 `overlay.get(instanceId)?.eventId === 本次 eventId`，不等就只更新 journal，
 不碰渲染。快速连拖同一件时，这是唯一的正确解。
 
-**约束二：`unknown` 不无限期冒充成功。**
+**约束二：`unknown` 不无限期冒充成功，也不能永久压制真实变化。**
 
-超过核验期限（建议 5 分钟）仍未一致，保留 overlay 但把 `state` 置 `unknown`，
-UI 画现有的 `pending: 'unconfirmed'` 环。用户看到的是「我不知道它到没到」，
-不是「到了」也不是「回来了」。
+超过核验期限（5 分钟）仍未一致 → `unknown`，保留 overlay，画未确认环。
+
+但如果**之后**又连续观察到稳定的、不同于 target 的位置（说明用户已经在游戏里把它挪走了），
+旧 overlay 转 `superseded`：**不再控制渲染**，但记录留在 journal 里。
+
+`superseded` 不是承认那次操作失败，是承认它的显示意图已经不配继续管这块界面。
+没有这个状态，一条 `unknown` 会让某件物品永远显示在你以为它该在的地方。
+
+**约束三：一次回读只能证明它自己那次操作，而且必须晚于那次操作发起。**
+
+A 的回读可能看到 B 的最终态：
+
+```
+t0  A: 仓库 → 术士，发出
+t1  A 发起回读
+t2  B: 术士 → 猎人，发出并成功
+t3  A 的回读返回：猎人        ← 这是 B 的结果，不是 A 的
+```
+
+所以回读结果要带三个时间戳（发起读的时刻、结果到达的时刻）和目标操作的 `submittedAt`，
+只有 `读发起时刻 >= 目标操作的 submittedAt` 才能用来核验那次操作。否则整条读完的结果丢弃。
 
 ## 三、刷新合并：新快照不许直接替换
 
 现在 `load()` 拿到新快照就 `setState({ snapshot })` 整体替换。改成：
 
+拆成三层，**合并本身是纯的**：
+
 ```ts
-const merged = mergeOverlay(snapshot.items, overlay)
+const observations = compareSnapshot(snapshot, overlay)   // 纯：快照 vs target
+const { overlay: next, transitions } = reconcileOverlay(  // 纯：推导状态转换
+  overlay, observations, now,
+)
+const rendered = applyOverlay(snapshot.items, next)       // 纯：只产出要画的行
+// transitions 交给 hook 层去写 journal —— 渲染路径上没有副作用
 ```
+
+职责：
+
+| 模块 | 只做 |
+|---|---|
+| `compareSnapshot` | 把快照与 target 的差异变成 `Observation[]`（带读的发起时刻） |
+| `reconcileOverlay` | 由观测推出状态转换，返回新 overlay + `Transition[]` |
+| `applyOverlay` | 给定 rows 与 overlay，返回要渲染的 rows |
+| hook 层 | 把 `Transition[]` 落成 `/journal/resolve` |
+
+这样刷新时反复调用不会重复写 journal，也不会在渲染函数里藏异步。
 
 对 overlay 里的每个实例：
 
@@ -114,15 +175,20 @@ const merged = mergeOverlay(snapshot.items, overlay)
 - **不把 overlay 交给 host 保管**：那会让"现在该显示什么"变成服务端状态，
   而它本质上是客户端的渲染意图。
 
-## 六、实施步骤（小步，不重构）
+## 六、实施步骤（小步，每步一个提交，不重构）
 
-1. `src/client/pending-ops.ts`（新）：Overlay 数据结构 + merge + 序号分配 + 状态机。纯逻辑，可单测。
-2. `use-item-actions.ts`：写之前登记 overlay，落定后进 `verifying`。
-3. `InventoryPanel.tsx` 的 `load()`：改为 `mergeOverlay` 后再 `setState`。
-4. `settle-by-readback.ts`：改成"一次读 + 观测驱动"，结果写回 overlay 而不是直接改行。
-5. 单测：merge 规则、多操作序号、超期 unknown、`unknown` 不被移除。
+| 步 | 内容 | 验收 |
+|---|---|---|
+| **P1.1** | `pending-ops.ts` 纯逻辑：状态机、每实例序号、reconcile、applyOverlay、失败分类 | 单测覆盖多操作、旧回读、超期、superseded |
+| P1.2 | `use-item-actions.ts` 接入：写前登记，三种落定各归其位 | 明确拒绝不留 overlay；超时进 verifying |
+| P1.3 | `InventoryPanel.load()` 接 `applyOverlay` | 刷新不覆盖未核验的目标 |
+| P1.4 | 核验统一：一次主动读 + 观测驱动，成功与不明共用 | 成功路径也有 verified |
+| P1.5 | `Transition[]` 落 journal；F5 后从 journal 恢复本次会话未完成的意图 | 状态转换可追溯，不重复写 |
+| P1.6 | DSH 页面 E2E（E1–E7） | 七个场景全过 |
 
-不改：TTL、journal 形状、detect-external、写入队列。这四块都属于别的阶段。
+**不改**：TTL、journal 的形状（P1.5 只复用现有 `/journal/resolve`）、`detect-external`、
+写入队列。**同一物品的写必须串行**——现有的 `write-queue` 已经做到了（按 instanceId 排队），
+本层不再加锁，但要在测试里钉住这条前提。
 
 ## 七、测试
 
@@ -169,7 +235,8 @@ const merged = mergeOverlay(snapshot.items, overlay)
 
 ## 九、已知限制（写下来，不假装没有）
 
-1. **overlay 在页面刷新后丢失**。F5 之后如果还在同步窗口内，面板会显示旧位置。
+1. **overlay 在页面刷新后丢失**。P1.5 会从 journal 里恢复"最近 5 分钟内、目标与快照不符"
+   的 ui 操作意图，缓解这一条；在 P1.5 之前，F5 之后仍在同步窗口内就会看到旧位置。
 2. **`unknown` 会一直挂着**，直到用户下一次对同一件物品动手或重新打开面板。
 3. **观测驱动的核验依赖"有人读"**。长时间不刷新就停在 `verifying`，最后转 `unknown`。
 4. **本层不解决双入口**。agent 通过 MCP 改的东西，仍然只能等 `detect-external` 事后确认。
