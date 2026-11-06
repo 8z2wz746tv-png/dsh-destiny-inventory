@@ -66,7 +66,19 @@ export function isUsable(value: unknown, account: AccountKey): value is Cached {
   return typeof snapshot.total === 'number'
 }
 
+/**
+ * One connection for the page. Two `open()` calls resolve in an unspecified order,
+ * so two writes could create their transactions in reverse — and the older snapshot
+ * would land last, poisoning the next cold start.
+ */
+let connection: Promise<IDBDatabase | null> | null = null
+
 function openDb(): Promise<IDBDatabase | null> {
+  if (connection === null) connection = connect()
+  return connection
+}
+
+function connect(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null)
   return new Promise((resolve) => {
     let request: IDBOpenDBRequest

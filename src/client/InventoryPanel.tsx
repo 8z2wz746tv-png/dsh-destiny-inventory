@@ -26,7 +26,6 @@ import type { InventoryFilters, LayoutMode, StoreCell } from './filter'
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; snapshot: InventorySnapshot; profile: PlayerProfileView }
-  | { kind: 'error'; message: string }
 
 
 
@@ -98,6 +97,8 @@ function StoreCard({
 
 export function InventoryPanel({ routePath }: { routePath: string }): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  /** Last request failure: kept apart so a failed refresh cannot delete the painted grid. */
+  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<InventoryFilters>(DEFAULT_FILTERS)
   const hoverCard = useHoverCard()
   const overlays = state.kind === 'ready' ? state.snapshot.overlays : undefined
@@ -132,8 +133,8 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         {
           routePath,
           pending,
-          onSnapshot: (snapshot, profile) => setState({ kind: 'ready', snapshot, profile }),
-          onError: (message) => setState({ kind: 'error', message }),
+          onSnapshot: (snapshot, profile) => { setError(null); setState({ kind: 'ready', snapshot, profile }) },
+          onError: setError,
         },
         signal,
         refresh,
@@ -355,7 +356,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         onRefresh={() => load(new AbortController().signal, true)}
       />
 
-      {state.kind === 'loading' && (
+      {state.kind === 'loading' && error === null && (
         <div className="dsh-destiny-skeleton" aria-hidden="true">
           {Array.from({ length: 4 }, (_, rowIndex) => (
             <div key={rowIndex} className="dsh-destiny-skeleton__row">
@@ -367,8 +368,10 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           <p className="dsh-destiny-panel__state">正在读取仓库…</p>
         </div>
       )}
-      {state.kind === 'error' && (
-        <p className="dsh-destiny-panel__state dsh-destiny-panel__state--error">{state.message}</p>
+      {error !== null && (
+        <p className="dsh-destiny-panel__state dsh-destiny-panel__state--error">
+          {(state.kind === 'ready' ? '刷新失败，下面是上一次的数据：' : '') + error}
+        </p>
       )}
       {state.kind === 'ready' && state.snapshot.truncated && (
         <p className="dsh-destiny-panel__state dsh-destiny-panel__state--error">
