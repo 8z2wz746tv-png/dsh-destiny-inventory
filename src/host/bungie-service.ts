@@ -240,8 +240,6 @@ export class BungieService {
   /**
    * Run one item action straight against Bungie.
    *
-   * Deliberately not routed through the MCP: that path added a host → MCP process
-   * → Bungie round trip to every drag.
    * @param write - what to do.
    * @returns a human summary of what was asked.
    */
@@ -254,9 +252,10 @@ export class BungieService {
           membershipType: membership.membershipType,
           membershipId: membership.membershipId,
         },
-        // A write reads only the item hash and the character table, neither of
-        // which an item's position changes — so it must not pay for a fresh read.
+        // A write reads only the hash and the character table — neither changes with
+        // an item's position, so it must not pay for a fresh read.
         snapshot: () => this.cache.stable(),
+        definitions: () => this.definitions(),
         invalidate: () => this.invalidate(),
       },
       write,

@@ -185,6 +185,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/host/serialize-writes.ts` | host 侧串行：多标签页不打架，journal 顺序 = 真实顺序。 |
 | `src/host/item-write.ts` | 一次写入的分发：lock / equip / pull / move。**move 的实体在 `move-item.ts`**。 |
 | `src/host/move-item.ts` | 移动的实体：`from` 由调用方给；**角色→角色必须先回仓库**（Bungie 对直连回 1623）。 |
+| `src/host/check-room.ts` | 发请求前查目标桶：容量来自 Manifest 的 `itemCount`（**含装备位**），占用来自快照。满就拦，不让上游回那句没用的英文。 |
 | `src/host/item-state-route.ts` | 单件位置。**从强制刷新的 profile 读**——`.../Item/{id}/` 从不回 characterId。 |
 | `src/host/journal-record.ts` | 一次写入 → 一条 journal 记录（含 `from`/`to` 映射）。 |
 | `src/host/context-store.ts` | 面板当前视图 + 200 条 journal，落盘 jsonl，**启动时读回**（否则重启一次"刚才那件"就没了）。给 agent 读，不给 agent 写。 |

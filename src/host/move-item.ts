@@ -4,13 +4,14 @@
  * Split out of `item-write.ts` when character-to-character moved in: that file was
  * at its ceiling, and the reason this is not one call deserves its own place.
  */
-import type { BungieClient } from '../bungie/client'
-import type { ProfileSnapshot } from '../bungie/profile'
 import { BungieApiError } from '../bungie/client'
+import type { ProfileSnapshot } from '../bungie/profile'
 import { transferItem } from '../bungie/write'
-import type { ItemWrite, WriteTarget } from '../bungie/write'
+import type { ItemWrite } from '../bungie/write'
+import { ensureRoom } from './check-room'
 import { CLASS_LOCATION } from './dto'
 import { BridgeFault } from './http'
+import type { WriteDeps } from './item-write'
 
 /**
  * Resolve a location key (`hunter`) to the character id Bungie wants.
@@ -48,17 +49,16 @@ const STORE_LABEL: Record<string, string> = {
  * @returns a human summary.
  */
 export async function moveItem(
-  client: BungieClient,
-  target: WriteTarget,
-  snapshot: () => Promise<ProfileSnapshot>,
+  deps: WriteDeps,
   write: ItemWrite,
   itemHash: number,
+  bucketHash: number,
 ): Promise<string> {
+  const { client, target, snapshot } = deps
   if (write.from === undefined) {
     throw new BridgeFault('BadRequest', 'move 需要 from（这件物品现在在哪个位置键）')
   }
-  // "There are no item slots available to transfer this item" is accurate and
-  // useless: it names neither the store nor what to do. Say which one is full.
+  // "There are no item slots available" names neither the store nor the fix.
   const where = write.characterId === undefined ? '仓库' : (STORE_LABEL[write.characterId] ?? write.characterId)
   const attempt = async (
     transfer: () => Promise<void>,
@@ -95,6 +95,8 @@ export async function moveItem(
   // `DestinyItemNotFound` for it, which reads like a data problem and is not one.
   // It goes out through the vault — the MCP's receipt says "via vault" for the same
   // reason.
+  // Ask before spending a round trip: capacity and occupancy are both known here.
+  await ensureRoom(deps.definitions, snapshot, destination, bucketHash, where)
   if (write.from !== 'vault') {
     const owner = await ownerOf()
     // The vault is only a waypoint here, so "术士那边满了" would point at the wrong

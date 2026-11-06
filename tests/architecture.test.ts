@@ -72,6 +72,7 @@ describe('module size', () => {
     'src/bungie/write.ts': 210,
     'src/host/item-write.ts': 110,
     'src/host/move-item.ts': 115,
+    'src/host/check-room.ts': 60,
     'src/client/receipts.ts': 40,
     'src/index.ts': 200,
   }

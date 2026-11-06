@@ -5,7 +5,7 @@
  * declared here rather than in `host/` so the dependency arrow keeps pointing
  * downward: `host → bungie`, never the reverse.
  */
-import type { ManifestStore } from './manifest'
+import type { BucketDefinition, ManifestStore } from './manifest'
 
 /** Definition lookups the host layer is allowed to use. */
 export interface DefinitionLookup {
@@ -39,7 +39,8 @@ export interface DefinitionLookup {
     /** Definition owns a crafting socket. */
     craftingSocket: boolean
   } | null
-  bucket: (hash: number) => { name: string } | null
+  /** Full bucket definition: name for the receipt, `itemCount` for capacity. */
+  bucket: (hash: number) => BucketDefinition | null
   /** One perk/mod definition, or null when the hash is unknown. */
   plug: (hash: number) => {
     name: string

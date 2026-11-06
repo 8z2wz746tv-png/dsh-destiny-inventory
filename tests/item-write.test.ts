@@ -18,11 +18,17 @@ const snapshot = (items: { instanceId: string; itemHash: number; characterId: st
     ],
   }) as unknown as ProfileSnapshot
 
+/** Capacity 10 / occupancy whatever the test passes, so the room check is inert unless tested. */
+const lookup = (itemCount = 99) => () => ({
+  bucket: () => ({ hash: 1, name: '威能武器', category: null, location: 0, itemCount, hasTransferDestination: false }),
+}) as never
+
 function deps(stub: ReturnType<typeof vi.fn>, items = [{ instanceId: 'i1', itemHash: 555, characterId: 'hunter' }]) {
   return {
     client: { post: stub } as never,
     target: { membershipType: 3, membershipId: '42' },
     snapshot: async () => snapshot(items),
+    definitions: lookup(),
     invalidate: vi.fn(),
   }
 }

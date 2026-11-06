@@ -5,6 +5,7 @@
  * still owns the client, the snapshot cache and invalidation.
  */
 import type { BungieClient } from '../bungie/client'
+import type { DefinitionLookup } from '../bungie/lookup'
 import type { ProfileSnapshot } from '../bungie/profile'
 import { BridgeFault } from './http'
 import { idOf, moveItem } from './move-item'
@@ -16,6 +17,8 @@ export interface WriteDeps {
   client: BungieClient
   target: WriteTarget
   snapshot: () => Promise<ProfileSnapshot>
+  /** Manifest lookups: capacity for the room check, names for the receipt. */
+  definitions: () => DefinitionLookup
   /** Called after a successful action so the next read sees the new state. */
   invalidate: () => void
 }
@@ -60,7 +63,7 @@ export async function runItemWrite(deps: WriteDeps, write: ItemWrite): Promise<s
     deps.invalidate()
     return '已从邮政官取回'
   }
-  const summary = await moveItem(client, target, deps.snapshot, write, item.itemHash)
+  const summary = await moveItem(deps, write, item.itemHash, item.bucketHash)
   deps.invalidate()
   return summary
 }
