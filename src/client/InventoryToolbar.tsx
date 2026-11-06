@@ -7,7 +7,7 @@
 /** Filled in by the bundler from package.json (tsdown `define`). */
 declare const __PLUGIN_VERSION__: string
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { CategoryFilter, InventoryFilters, SortKey } from './filter'
 
@@ -32,8 +32,19 @@ export interface InventoryToolbarProps {
   /** Character count shown at the right, empty while loading. */
   countLabel: string
   busy: boolean
+  /** When the rows on screen were read from Bungie; null while there are none. */
+  fetchedAt: number | null
   onPatch: (next: Partial<InventoryFilters>) => void
   onRefresh: () => Promise<void>
+}
+
+/** How stale the picture is, in words. Colour alone would not say it. */
+function ageLabel(fetchedAt: number | null, now: number): string | null {
+  if (fetchedAt === null) return null
+  const minutes = Math.floor(Math.max(0, now - fetchedAt) / 60_000)
+  if (minutes < 1) return '刚刚更新'
+  if (minutes < 5) return `${minutes} 分钟前更新`
+  return `${minutes} 分钟前更新 · 较旧`
 }
 
 /** Filter bar: one control per filter dimension. */
@@ -42,12 +53,21 @@ export function InventoryToolbar({
   types,
   countLabel,
   busy,
+  fetchedAt,
   onPatch,
   onRefresh,
 }: InventoryToolbarProps): ReactElement {
   const [refreshing, setRefreshing] = useState(false)
-  /** When the last successful refresh landed; the only proof the button did anything. */
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  /** True once a refresh has been waiting long enough to deserve an explanation. */
+  const [waiting, setWaiting] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  // The label is relative ("3 分钟前"), so it has to be recomputed while the panel
+  // sits open; nothing else here needs a timer.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   return (
     <div className="dsh-destiny-toolbar">
@@ -110,16 +130,19 @@ export function InventoryToolbar({
         onClick={() => {
           // A cold refresh takes seconds; without this the button looks dead.
           setRefreshing(true)
+          setWaiting(false)
+          const slow = window.setTimeout(() => setWaiting(true), 5_000)
           void onRefresh().finally(() => {
+            window.clearTimeout(slow)
             setRefreshing(false)
-            setUpdatedAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+            setWaiting(false)
           })
         }}
       >
-        {refreshing ? '刷新中…' : '刷新'}
+        {refreshing ? (waiting ? '仍在等待…' : '刷新中…') : '刷新'}
       </button>
-      {updatedAt !== null && !refreshing && (
-        <span className="dsh-destiny-toolbar__updated">{updatedAt} 更新</span>
+      {!refreshing && ageLabel(fetchedAt, now) !== null && (
+        <span className="dsh-destiny-toolbar__updated">{ageLabel(fetchedAt, now)}</span>
       )}
       <span className="dsh-destiny-toolbar__count">{countLabel}</span>
       <span className="dsh-destiny-build" title="当前加载的插件版本">

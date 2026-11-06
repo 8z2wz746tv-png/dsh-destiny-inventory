@@ -351,7 +351,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         filters={filters}
         types={types}
         countLabel={state.kind === 'ready' ? visibleCount + ' / ' + state.snapshot.total : ''}
-        busy={actions.busy}
+        busy={actions.busy} fetchedAt={state.kind === 'ready' ? state.snapshot.fetchedAt : null}
         onPatch={patch}
         onRefresh={() => load(new AbortController().signal, true)}
       />

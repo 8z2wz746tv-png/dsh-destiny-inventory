@@ -49,6 +49,16 @@ export interface BungieClientOptions {
 export type QueryValues = Record<string, string | number | undefined>
 
 /**
+ * How long one upstream call may hang.
+ *
+ * Measured `GetProfile` for a single account at 0.6 s on a good minute and 14.7 s on
+ * a bad one; without a ceiling the request — and the refresh button behind it —
+ * waits for as long as Bungie does. This is an engineering default, not a measured
+ * P95: there are too few samples for that, and it should move once there are.
+ */
+export const UPSTREAM_TIMEOUT_MS = 20_000
+
+/**
  * Translate the handful of upstream failures that have a known operator action.
  * Unknown codes keep Bungie's own text.
  */
@@ -119,14 +129,28 @@ export class BungieClient {
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) url.searchParams.set(key, String(value))
     }
-    const response = await this.fetchImpl(url, {
-      method: 'GET',
-      headers: {
-        'X-API-Key': this.apiKey,
-        Authorization: `Bearer ${token.value}`,
-        accept: 'application/json',
-      },
-    })
+    // A hang is a failure, not an indefinite wait: abort and say so.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
+    let response: Response
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': this.apiKey,
+          Authorization: `Bearer ${token.value}`,
+          accept: 'application/json',
+        },
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new BungieApiError(504, undefined, 'UpstreamTimeout', `Bungie ${UPSTREAM_TIMEOUT_MS / 1000} 秒没有回应`)
+      }
+      throw error
+    } finally {
+      clearTimeout(timer)
+    }
     const text = await response.text()
     let envelope: BungieEnvelope<T> | undefined
     try {
