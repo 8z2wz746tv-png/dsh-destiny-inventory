@@ -1,6 +1,6 @@
 # P3：让界面上的操作进 agent 上下文（按原计划规格重写）
 
-2026-11-06 第二版。第一版偏离了 `PLAN-SELF-HOSTED-DIM.md` §4，`CONTEXT-PLAN-DIFF.md` 里已对账。
+2026-11-06 第二版。第一版偏离了 `docs/plans/PLAN-SELF-HOSTED-DIM.md` §4，`docs/research/CONTEXT-PLAN-DIFF.md` 里已对账。
 这一版把偏离的地方改回去了，唯一保留的新增是"自动上下文"。
 
 ## 一句话
@@ -43,7 +43,7 @@ interface JournalEntry {
 
 **落盘**：`~/.dsh/destiny-workspace/journal.jsonl`，追加写，保留最近 200 条。内存仍是唯一真源，落盘只为排查。
 
-`result` 值是 `ok | failed | unconfirmed`——原计划的第三个是 `rolledback`，现在不做回滚了（见 `PLAN-SELF-HOSTED-DIM.md` §3.2），换成 `unconfirmed`。
+`result` 值是 `ok | failed | unconfirmed`——原计划的第三个是 `rolledback`，现在不做回滚了（见 `docs/plans/PLAN-SELF-HOSTED-DIM.md` §3.2），换成 `unconfirmed`。
 
 ### 两个工具 —— 原名
 

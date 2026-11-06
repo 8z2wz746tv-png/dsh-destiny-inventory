@@ -44,7 +44,7 @@
 
 - 模组写入（`InsertSocketPlugFree`）：没有
 - 套装/属性条：属性条有，套装没有
-- 搜索语法：**用户明确不要**，改成"名字 + perk 名"（`docs/PLAN-SEARCH.md`）
+- 搜索语法：**用户明确不要**，改成"名字 + perk 名"（`docs/plans/PLAN-SEARCH.md`）
 
 ## 地基结论
 

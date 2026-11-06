@@ -15,7 +15,7 @@
 
 **界面不是目的，是给 agent 供料的手段。** 评估任何新功能时先问：它让 agent 更懂用户在干什么了吗？
 
-### 边界（`PLAN-SELF-HOSTED-DIM.md` §1，写死不许越）
+### 边界（`docs/plans/PLAN-SELF-HOSTED-DIM.md` §1，写死不许越）
 
 | | 谁负责 |
 |---|---|
@@ -169,7 +169,7 @@ HighlightedObjective = 16, Enhanced = 32
 **分组发生在 vault 那一格的内部**：武器按 `type`、护甲按 `classType`，块首有图标。
 角色格永远平铺，不分段。
 
-早期我把分组做成"行级"，破坏了四列对齐——`docs/GROUPING_PLAN.md` 里有对账。
+早期我把分组做成"行级"，破坏了四列对齐——`docs/plans/GROUPING_PLAN.md` 里有对账。
 
 ### 5. 写入必须自己说清"物品现在在哪"
 
@@ -236,7 +236,7 @@ HighlightedObjective = 16, Enhanced = 32
 
 ### 3. 搜索不引 DIM 的语法
 
-DIM 有 152 个搜索关键词（`is:dupe`、`stat:range:>=50`…）。**用户明确说不会用**，要中文名 + perk 名搜索。方案在 `docs/PLAN-SEARCH.md`，未实现。
+DIM 有 152 个搜索关键词（`is:dupe`、`stat:range:>=50`…）。**用户明确说不会用**，要中文名 + perk 名搜索。方案在 `docs/plans/PLAN-SEARCH.md`，未实现。
 
 ### 4. journal 的 `result` 是 `ok | failed | unconfirmed`
 
@@ -279,7 +279,7 @@ BUNGIE_API_KEY="$(grep '^BUNGIE_API_KEY=' ~/项目/destiny2-mcp/.env | cut -d= -
 
 ## 八、工作习惯（用户明确要求过）
 
-- **大改动先给计划**（`docs/PLAN-*.md`），确认后**一次做到位**，别每步问"要不要继续"
+- **大改动先给计划**（`docs/plans/PLAN-*.md`），确认后**一次做到位**，别每步问"要不要继续"
 - **汇报要真实反馈**，第一人称说自己哪里做得差，不要表格堆砌
 - **不要主动巡逻式找 bug** —— 只修真实咬到的问题
 - **改完要验四步**：tsc → 测试 → 真机 → **眼睛**。我因为跳过最后一步交付了四版坏布局
@@ -290,7 +290,7 @@ BUNGIE_API_KEY="$(grep '^BUNGIE_API_KEY=' ~/项目/destiny2-mcp/.env | cut -d= -
 
 ## 九、待办（按优先级）
 
-1. **搜索**（方案 `docs/PLAN-SEARCH.md` 已定；不碰写接口；日常收益最大）
+1. **搜索**（方案 `docs/plans/PLAN-SEARCH.md` 已定；不碰写接口；日常收益最大）
 2. 标记体系（垃圾/保留/青睐/灌注/归档，本地存）
 3. 批量选择（框选 + 批量锁定/标记）
 4. 插槽可点（换 perk / 装模组，走 `InsertSocketPlugFree`）
@@ -298,7 +298,7 @@ BUNGIE_API_KEY="$(grep '^BUNGIE_API_KEY=' ~/项目/destiny2-mcp/.env | cut -d= -
 6. 修「命运随航」预设（结构已改，未验证）
 7. journal 的时间戳改 ISO（现在存 `Date.now()` 毫秒数，agent 要自己换算时区）
 
-~~写队列~~ ✅ 见 `docs/PLAN-WRITE-QUEUE.md`、§四之 5。
+~~写队列~~ ✅ 见 `docs/plans/PLAN-WRITE-QUEUE.md`、§四之 5。
 
 ---
 

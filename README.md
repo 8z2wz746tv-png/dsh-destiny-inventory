@@ -16,7 +16,7 @@ dsh plugin add /绝对路径/dsh-destiny-inventory-<版本>.tgz
 - **自己的写入**：移动 / 装备 / 锁定 / 邮政官取回都直接 POST Bungie，不经 MCP。
 - **MCP 只服务随航 agent**：分析、配装、模组那些留给它。
 
-边界写在 [`PLAN-SELF-HOSTED-DIM.md`](PLAN-SELF-HOSTED-DIM.md) §1，动代码前先看那份。
+边界写在 [`docs/plans/PLAN-SELF-HOSTED-DIM.md`](docs/plans/PLAN-SELF-HOSTED-DIM.md) §1，动代码前先看那份。
 
 ## 开发
 

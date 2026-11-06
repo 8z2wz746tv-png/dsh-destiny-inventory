@@ -1,7 +1,7 @@
 /**
  * Bungie's item actions, called directly from our own data plane.
  *
- * PLAN-SELF-HOSTED-DIM §1: reads and writes both belong to the front end. The MCP
+ * docs/plans/PLAN-SELF-HOSTED-DIM.md §1: reads and writes both belong to the front end. The MCP
  * stays for the agent only. Going through it added two hops (host → MCP process →
  * Bungie) to every drag, which is why a move took seconds.
  */

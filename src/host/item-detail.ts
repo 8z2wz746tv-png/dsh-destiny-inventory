@@ -1,7 +1,7 @@
 /**
  * Item detail assembled from our own data plane.
  *
- * Deliberately does not go through MCP (PLAN-SELF-HOSTED-DIM §1): reading is the
+ * Deliberately does not go through MCP (docs/plans/PLAN-SELF-HOSTED-DIM.md §1): reading is the
  * front end's own job. Sources are the Manifest (definitions) plus components
  * 300 (instance stats) and 305 (sockets).
  */
