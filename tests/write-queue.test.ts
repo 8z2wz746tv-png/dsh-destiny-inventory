@@ -149,4 +149,36 @@ describe('write queue', () => {
     await done
     expect(seen).toEqual([0, 1, 0])
   })
+
+  it('never runs a task it reports as cancelled or superseded', async () => {
+    const queue = new WriteQueue()
+    const executed: string[] = []
+    const gate = queue.enqueue('gate', false, async () => {
+      await delay(10)
+      return 'gate'
+    })
+
+    const replaced = queue.enqueue('a', true, async () => {
+      executed.push('a-old')
+      return 'a-old'
+    })
+    const dropped = queue.enqueue('b', false, async () => {
+      executed.push('b')
+      return 'b'
+    })
+    const replacement = queue.enqueue('a', true, async () => {
+      executed.push('a-new')
+      return 'a-new'
+    })
+    expect(queue.cancel('b')).toBe(true)
+
+    await gate
+    expect(await replaced).toEqual({ kind: 'superseded' })
+    expect(await dropped).toEqual({ kind: 'cancelled' })
+    expect(await replacement).toEqual({ kind: 'ran', value: 'a-new' })
+    // The whole point: those two outcomes mean "Bungie never saw it", and the
+    // caller turns that into a definite rejection. If the queue ever ran them,
+    // that rejection would be a lie.
+    expect(executed).toEqual(['a-new'])
+  })
 })

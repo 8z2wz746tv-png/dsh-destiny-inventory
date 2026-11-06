@@ -6,8 +6,25 @@
  * back to an observation that is merely late is what made a finished drag look
  * undone — and it is the reason this layer exists.
  */
-import type { PendingOperation } from './pending-ops'
+import type { Observation, PendingOperation } from './pending-ops'
 import type { ItemRow } from '../host/types'
+
+/**
+ * Turn one read into observations. `issuedAt` is when the request went out, not
+ * when it came back: a read that started before an operation proves nothing about it.
+ */
+export function compareSnapshot(
+  rows: ItemRow[],
+  ops: ReadonlyMap<string, PendingOperation>,
+  issuedAt: number,
+): Observation[] {
+  const byId = new Map(rows.map((row) => [row.instanceId, row.locationKey]))
+  return [...ops.values()].map((operation) => ({
+    instanceId: operation.instanceId,
+    location: byId.get(operation.instanceId) ?? '',
+    startedAt: issuedAt,
+  }))
+}
 
 /**
  * Rewrite rows that have an unsettled operation.

@@ -12,6 +12,8 @@ import { ItemDetailCard } from './ItemDetail'
 import { DEFAULT_FILTERS, availableTypes, buildSections, emptyShelfSections } from './filter'
 import { InventoryToolbar } from './InventoryToolbar'
 import { useItemActions } from './use-item-actions'
+import { PendingOps } from './pending-ops'
+import { applyOverlay, compareSnapshot } from './pending-ops-render'
 import { Receipts } from './Receipts'
 import { useViewReport } from './use-view-report'
 import { viewOf } from './view-reporter'
@@ -100,6 +102,8 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const hoverCard = useHoverCard()
   const overlays = state.kind === 'ready' ? state.snapshot.overlays : undefined
   const receipts = useReceipts()
+  // Asked for, not yet confirmed: the action hook registers into it, `load` draws.
+  const pending = useMemo(() => new PendingOps(), [])
   const [dragging, setDragging] = useState<ItemRow | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   /** Width class of the panel: a side panel is not a full-screen DIM. */
@@ -123,16 +127,22 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   }, [routePath, state])
 
   const load = useCallback((signal: AbortSignal, refresh: boolean): void => {
+    const issuedAt = Date.now() // before the request: see compareSnapshot
     Promise.all([fetchInventory(routePath, signal, refresh), fetchCharacters(routePath, signal)]).then(
       ([snapshot, profile]) => {
-        if (!signal.aborted) setState({ kind: 'ready', snapshot, profile })
+        if (signal.aborted) return
+        // Agreeing confirms an operation; disagreeing does not undo it. P1.5 will
+        // journal these transitions — for now the overlay is the only consumer.
+        pending.reconcile(compareSnapshot(snapshot.items, pending.all(), issuedAt), Date.now())
+        const items = applyOverlay(snapshot.items, pending.all())
+        setState({ kind: 'ready', snapshot: { ...snapshot, items }, profile })
       },
       (error: unknown) => {
         if (signal.aborted) return
         setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
       },
     )
-  }, [routePath])
+  }, [pending, routePath])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -171,6 +181,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     routePath,
     receipts,
     patchRows,
+    pending,
     closeCard: hoverCard.close,
   })
 

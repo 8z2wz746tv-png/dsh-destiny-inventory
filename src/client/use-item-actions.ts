@@ -47,6 +47,8 @@ export interface ItemActions {
 /** What the queue needs from the panel. */
 export interface ItemActionOptions {
   routePath: string
+  /** The overlay the panel draws from; one instance, owned by the panel. */
+  pending: PendingOps
   receipts: ReceiptController
   patchRows: (change: (rows: ItemRow[]) => ItemRow[]) => void
   /** The detail card is a single-shot surface: a lock closes it. */
@@ -58,12 +60,10 @@ export interface ItemActionOptions {
  * @param options - bridge path, receipts, row patcher, card closer.
  */
 export function useItemActions(options: ItemActionOptions): ItemActions {
-  const { routePath, receipts, patchRows, closeCard } = options
+  const { routePath, receipts, patchRows, closeCard, pending } = options
   // One queue for the life of the panel: it is the thing that makes two drags
   // take turns instead of racing.
   const queue = useMemo(() => new WriteQueue(), [])
-  /** What the panel asked for and Bungie has not confirmed; P1.3 starts drawing it. */
-  const pending = useMemo(() => new PendingOps(), [])
   const [busy, setBusy] = useState(false)
   const [pendingEquip, setPendingEquip] = useState<ItemActions['pendingEquip']>(null)
 
@@ -125,16 +125,25 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
         )
         .then((outcome) => {
           if (outcome.kind === 'ran') return outcome.value
-          // Replaced by a later drag, or cancelled while waiting: it never left, so
-          // it definitely did not execute. The overlay for a newer operation (if
-          // any) is a different `eventId` and is left alone.
+          // `superseded` and `cancelled` are only ever produced for a write still
+          // sitting in the queue: `WriteQueue` drops it from `waiting` before
+          // anything runs, so Bungie never saw it. That is the only reason
+          // `rejected` is honest here. A write already on the wire is *aborted*
+          // instead, which surfaces as `unclear` inside `sendAction` and stays
+          // `verifying` — an aborted request may well have executed upstream.
           const abandoned = pending.settle(eventId, 'rejected')
           if (abandoned?.kind === 'failed' && request.kind === 'move') {
             patchRows((rows) => confirmMove(rows, request.instanceId, request.from, false))
           }
           return null
         })
-        .catch(() => null)
+        .catch(() => {
+          // The executor threw something nobody classified: the item's fate is
+          // unknown, not unchanged. Leaving it `verifying` is the honest state,
+          // and it keeps the overlay from leaking when sendAction itself breaks.
+          pending.settle(eventId, 'unclear')
+          return null
+        })
     },
     [patchRows, pending, queue, receipts, routePath],
   )
