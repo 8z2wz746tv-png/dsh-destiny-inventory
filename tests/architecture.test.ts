@@ -35,6 +35,7 @@ describe('module size', () => {
     'src/client/pending-ops.ts': 240,
     'src/client/pending-ops-render.ts': 60,
     'src/client/send-action.ts': 120,
+    'src/client/snapshot-db.ts': 140,
     'src/client/use-item-actions.ts': 220,
     'src/client/use-receipts.ts': 90,
     'src/host/serialize-writes.ts': 40,

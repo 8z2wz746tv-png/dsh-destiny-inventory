@@ -207,6 +207,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/send-action.ts` | 一次写从发出到落定：接受/拒绝/不明三路分流。**拒绝恢复原位，不明才回读**。 |
 | `src/client/apply-move.ts` | 乐观移动：`applyMove`/`settleMove`/`confirmMove`/`applyLock`。 |
 | `src/client/settle-by-readback.ts` | 失败后按 Bungie 的真实位置落定，不回滚到可能已经过期的快照。 |
+| `src/client/snapshot-db.ts` | 浏览器里留一份上次的库存（**按账号分键**）。只负责存，不负责核验；任何失败都降级成"没有缓存"。 |
 | `src/client/api.ts` | 桥接请求 + 详情缓存（promise 与已解析值两份）。**浏览器唯一出口**。 |
 | `src/client/use-receipts.ts` | 回执栈：5 秒自动消失、可取消、排队中改文案。 |
 | `src/client/Receipts.tsx` | 回执渲染。 |
