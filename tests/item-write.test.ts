@@ -138,11 +138,13 @@ describe('runItemWrite', () => {
       throw new BungieApiError(400, 1642, 'DestinyNoRoomInDestination', 'There are no item slots available')
     })
     const d = deps(post, [{ instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' }])
+    // Straight out of the vault: one hop, so the warlock really is the destination
+    // that ran out of room.
     const failure = await runItemWrite(d, {
       kind: 'move',
       instanceId: 'i1',
       characterId: 'warlock',
-      from: 'hunter',
+      from: 'vault',
     }).catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(BridgeFault)
     const fault = failure as BridgeFault
@@ -152,6 +154,24 @@ describe('runItemWrite', () => {
     expect(fault.message).toContain('腾出一个位置')
     // The stable code survives, so `classifyFailure` still reads a definite refusal.
     expect(fault.code).toBe('DestinyNoRoomInDestination')
+  })
+
+  it('blames the vault only as a waypoint when a transfer is character to character', async () => {
+    const post = vi.fn(async () => {
+      throw new BungieApiError(400, 1642, 'DestinyNoRoomInDestination', 'There are no item slots available')
+    })
+    const d = deps(post, [{ instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' }])
+    const failure = await runItemWrite(d, {
+      kind: 'move',
+      instanceId: 'i1',
+      characterId: 'warlock',
+      from: 'hunter',
+    }).catch((error: unknown) => error)
+    const message = (failure as BridgeFault).message
+    // Injectable violation: say "术士 is full" here and the player is sent to empty
+    // a character that is fine, when the blocker is the vault waypoint.
+    expect(message).toContain('仓库')
+    expect(message).toContain('中转')
   })
 
   it('says the vault is full when that is the destination', async () => {

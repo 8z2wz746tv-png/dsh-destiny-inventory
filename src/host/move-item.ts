@@ -60,7 +60,10 @@ export async function moveItem(
   // "There are no item slots available to transfer this item" is accurate and
   // useless: it names neither the store nor what to do. Say which one is full.
   const where = write.characterId === undefined ? '仓库' : (STORE_LABEL[write.characterId] ?? write.characterId)
-  const attempt = async (transfer: () => Promise<void>): Promise<void> => {
+  const attempt = async (
+    transfer: () => Promise<void>,
+    whenFull = `${where}那边放不下这件东西了：那个位置的槽已经满，先腾出一个位置再试`,
+  ): Promise<void> => {
     try {
       await transfer()
     } catch (error) {
@@ -68,10 +71,7 @@ export async function moveItem(
         // The code is kept on purpose: `classifyFailure` reads it, and a made-up
         // code would turn a definite refusal into "unknown" and leave the item
         // looking unconfirmed forever.
-        throw new BridgeFault(
-          error.errorStatus,
-          `${where}那边放不下这件东西了：那个位置的槽已经满，先腾出一个位置再试`,
-        )
+        throw new BridgeFault(error.errorStatus, whenFull)
       }
       throw error
     }
@@ -97,7 +97,13 @@ export async function moveItem(
   // reason.
   if (write.from !== 'vault') {
     const owner = await ownerOf()
-    await attempt(() => transferItem(client, target, write.instanceId, itemHash, true, owner))
+    // The vault is only a waypoint here, so "术士那边满了" would point at the wrong
+    // store. DIM reserves vault space for exactly this hop; we cannot count free
+    // slots yet, so at least say what the vault is being used for.
+    await attempt(
+      () => transferItem(client, target, write.instanceId, itemHash, true, owner),
+      '仓库那边放不下了 —— 角色之间的转移必须先从仓库中转，先腾出一格仓库再试',
+    )
     await attempt(() => transferItem(client, target, write.instanceId, itemHash, false, destination))
     return '已移到角色背包（经仓库中转）'
   }
