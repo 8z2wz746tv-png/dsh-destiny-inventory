@@ -6,6 +6,7 @@
  */
 import type { BungieClient } from '../bungie/client'
 import type { ProfileSnapshot } from '../bungie/profile'
+import { BungieApiError } from '../bungie/client'
 import { transferItem } from '../bungie/write'
 import type { ItemWrite, WriteTarget } from '../bungie/write'
 import { CLASS_LOCATION } from './dto'
@@ -24,6 +25,14 @@ export async function idOf(
   const byKey = current.characters.find((character) => CLASS_LOCATION[character.classType] === location)
   if (byKey !== undefined) return byKey.characterId
   return current.characters.some((character) => character.characterId === location) ? location : undefined
+}
+
+/** The words a player uses for each store. */
+const STORE_LABEL: Record<string, string> = {
+  vault: '仓库',
+  hunter: '猎人',
+  warlock: '术士',
+  titan: '泰坦',
 }
 
 /**
@@ -48,6 +57,26 @@ export async function moveItem(
   if (write.from === undefined) {
     throw new BridgeFault('BadRequest', 'move 需要 from（这件物品现在在哪个位置键）')
   }
+  // "There are no item slots available to transfer this item" is accurate and
+  // useless: it names neither the store nor what to do. Say which one is full.
+  const where = write.characterId === undefined ? '仓库' : (STORE_LABEL[write.characterId] ?? write.characterId)
+  const attempt = async (transfer: () => Promise<void>): Promise<void> => {
+    try {
+      await transfer()
+    } catch (error) {
+      if (error instanceof BungieApiError && error.errorStatus === 'DestinyNoRoomInDestination') {
+        // The code is kept on purpose: `classifyFailure` reads it, and a made-up
+        // code would turn a definite refusal into "unknown" and leave the item
+        // looking unconfirmed forever.
+        throw new BridgeFault(
+          error.errorStatus,
+          `${where}那边放不下这件东西了：那个位置的槽已经满，先腾出一个位置再试`,
+        )
+      }
+      throw error
+    }
+  }
+
   // Resolved only where it is needed: taking something *out* of the vault has no
   // source character, and asking for one would fail a perfectly good request.
   const ownerOf = async (): Promise<string> => {
@@ -56,7 +85,8 @@ export async function moveItem(
     return owner
   }
   if (write.characterId === undefined) {
-    await transferItem(client, target, write.instanceId, itemHash, true, await ownerOf())
+    const owner = await ownerOf()
+    await attempt(() => transferItem(client, target, write.instanceId, itemHash, true, owner))
     return '已存入仓库'
   }
   const destination = await idOf(snapshot, write.characterId)
@@ -66,10 +96,11 @@ export async function moveItem(
   // It goes out through the vault — the MCP's receipt says "via vault" for the same
   // reason.
   if (write.from !== 'vault') {
-    await transferItem(client, target, write.instanceId, itemHash, true, await ownerOf())
-    await transferItem(client, target, write.instanceId, itemHash, false, destination)
+    const owner = await ownerOf()
+    await attempt(() => transferItem(client, target, write.instanceId, itemHash, true, owner))
+    await attempt(() => transferItem(client, target, write.instanceId, itemHash, false, destination))
     return '已移到角色背包（经仓库中转）'
   }
-  await transferItem(client, target, write.instanceId, itemHash, false, destination)
+  await attempt(() => transferItem(client, target, write.instanceId, itemHash, false, destination))
   return '已移到角色背包'
 }

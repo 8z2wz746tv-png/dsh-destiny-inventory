@@ -71,7 +71,7 @@ describe('module size', () => {
     'src/host/enhanced-perks.ts': 470,
     'src/bungie/write.ts': 210,
     'src/host/item-write.ts': 110,
-    'src/host/move-item.ts': 80,
+    'src/host/move-item.ts': 115,
     'src/client/receipts.ts': 40,
     'src/index.ts': 200,
   }

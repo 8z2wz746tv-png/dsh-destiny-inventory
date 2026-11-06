@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runItemWrite } from '../src/host/item-write'
+import { BridgeFault } from '../src/host/http'
+import { BungieApiError } from '../src/bungie/client'
 import { toItemWrite } from '../src/bungie/write'
 import type { ProfileSnapshot } from '../src/bungie/profile'
 
@@ -129,5 +131,37 @@ describe('runItemWrite', () => {
     const post = vi.fn(async () => ({}))
     await runItemWrite(deps(post), { kind: 'move', instanceId: 'i1', characterId: 'hunter', from: 'vault' })
     expect(post).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the store that is full instead of relaying the English', async () => {
+    const post = vi.fn(async () => {
+      throw new BungieApiError(400, 1642, 'DestinyNoRoomInDestination', 'There are no item slots available')
+    })
+    const d = deps(post, [{ instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' }])
+    const failure = await runItemWrite(d, {
+      kind: 'move',
+      instanceId: 'i1',
+      characterId: 'warlock',
+      from: 'hunter',
+    }).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(BridgeFault)
+    const fault = failure as BridgeFault
+    // Injectable violation: pass the upstream sentence through and the player is
+    // told nothing about which store is full or what to do.
+    expect(fault.message).toContain('术士')
+    expect(fault.message).toContain('腾出一个位置')
+    // The stable code survives, so `classifyFailure` still reads a definite refusal.
+    expect(fault.code).toBe('DestinyNoRoomInDestination')
+  })
+
+  it('says the vault is full when that is the destination', async () => {
+    const post = vi.fn(async () => {
+      throw new BungieApiError(400, 1642, 'DestinyNoRoomInDestination', 'There are no item slots available')
+    })
+    const d = deps(post, [{ instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' }])
+    const failure = await runItemWrite(d, { kind: 'move', instanceId: 'i1', from: 'hunter' }).catch(
+      (error: unknown) => error,
+    )
+    expect((failure as BridgeFault).message).toContain('仓库')
   })
 })
