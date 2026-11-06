@@ -126,9 +126,9 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     return () => controller.abort()
   }, [routePath, state])
 
-  const load = useCallback((signal: AbortSignal, refresh: boolean): void => {
+  const load = useCallback((signal: AbortSignal, refresh: boolean): Promise<void> => {
     const issuedAt = Date.now() // before the request: see compareSnapshot
-    Promise.all([fetchInventory(routePath, signal, refresh), fetchCharacters(routePath, signal)]).then(
+    return Promise.all([fetchInventory(routePath, signal, refresh), fetchCharacters(routePath, signal)]).then(
       ([snapshot, profile]) => {
         if (signal.aborted) return
         // Agreeing confirms an operation; disagreeing does not undo it. P1.5 will

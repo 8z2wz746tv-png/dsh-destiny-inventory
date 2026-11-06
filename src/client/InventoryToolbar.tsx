@@ -7,6 +7,7 @@
 /** Filled in by the bundler from package.json (tsdown `define`). */
 declare const __PLUGIN_VERSION__: string
 
+import { useState } from 'react'
 import type { ReactElement } from 'react'
 import type { CategoryFilter, InventoryFilters, SortKey } from './filter'
 
@@ -32,7 +33,7 @@ export interface InventoryToolbarProps {
   countLabel: string
   busy: boolean
   onPatch: (next: Partial<InventoryFilters>) => void
-  onRefresh: () => void
+  onRefresh: () => Promise<void>
 }
 
 /** Filter bar: one control per filter dimension. */
@@ -44,6 +45,8 @@ export function InventoryToolbar({
   onPatch,
   onRefresh,
 }: InventoryToolbarProps): ReactElement {
+  const [refreshing, setRefreshing] = useState(false)
+
   return (
     <div className="dsh-destiny-toolbar">
       <input
@@ -98,8 +101,17 @@ export function InventoryToolbar({
           </option>
         ))}
       </select>
-      <button type="button" className="dsh-destiny-toolbar__refresh" disabled={busy} onClick={onRefresh}>
-        刷新
+      <button
+        type="button"
+        className="dsh-destiny-toolbar__refresh"
+        disabled={busy || refreshing}
+        onClick={() => {
+          // A cold refresh takes seconds; without this the button looks dead.
+          setRefreshing(true)
+          void onRefresh().finally(() => setRefreshing(false))
+        }}
+      >
+        {refreshing ? '刷新中…' : '刷新'}
       </button>
       <span className="dsh-destiny-toolbar__count">{countLabel}</span>
       <span className="dsh-destiny-build" title="当前加载的插件版本">
