@@ -12,6 +12,7 @@
  * Neither is account data: if the process dies, the account is untouched and the
  * next snapshot is the truth. The journal file is for diagnosis, not replay.
  */
+import { readFileSync } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -110,6 +111,38 @@ export class ContextStore {
   ) {
     this.journalPath = journalPath
     this.now = now
+    this.restore()
+  }
+
+  /**
+   * Take the trail back off disk.
+   *
+   * Without this the journal is per-process, and "why did that fail" has no answer
+   * after the host restarts — which it does every time the host half changes. The
+   * file is the reason it exists at all; keeping it write-only defeated that.
+   *
+   * Later lines win: a correction carries the same `at` as the entry it corrects.
+   */
+  private restore(): void {
+    let text: string
+    try {
+      text = readFileSync(this.journalPath, 'utf8')
+    } catch {
+      // No trail yet: a first run, or someone deleted it.
+      return
+    }
+    const byAt = new Map<number, JournalEntry>()
+    // Only the tail can be in the ring; reading a year of history is not the job.
+    for (const line of text.split('\n').slice(-RING_SIZE * 3)) {
+      if (line.trim() === '') continue
+      try {
+        const entry = JSON.parse(line) as JournalEntry
+        byAt.set(entry.at, entry)
+      } catch {
+        // One mangled line must not take the whole trail with it.
+      }
+    }
+    this.entries.push(...[...byAt.values()].sort((a, b) => b.at - a.at).slice(0, RING_SIZE))
   }
 
   /** Replace the view; the browser sends the whole thing, not a diff. */

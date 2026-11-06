@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ContextStore } from '../src/host/context-store'
 import { detectExternal } from '../src/host/detect-external'
@@ -6,7 +9,9 @@ import type { ItemRow } from '../src/host/types'
 const row = (over: Partial<ItemRow>): ItemRow =>
   ({ instanceId: 'i1', hash: 42, name: '英勇利刃', locationKey: 'hunter', ...over }) as ItemRow
 
-const store = () => new ContextStore('/tmp/never-written.jsonl')
+/** A fresh path each time: the store reads its trail back on construction. */
+const store = () =>
+  new ContextStore(join(mkdtempSync(join(tmpdir(), 'journal-')), 'journal.jsonl'))
 
 describe('external change detection', () => {
   it('says nothing on the first read: everything would look like it moved', () => {

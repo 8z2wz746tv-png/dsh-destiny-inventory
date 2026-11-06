@@ -224,6 +224,7 @@ HighlightedObjective = 16, Enhanced = 32
 | `from` 一列里混两种词汇（`hunter` 和 `2305843009679355779`） | `locationOf()` 走 `resolveItemState()`，全用位置键 |
 | 宽屏四列并排时报 `character: 'hunter'` | 报 `'all'`，别谎称在看某个角色 |
 | 写入失败 → 前端回读确认已落地，但 journal 永远停在 `failed` | 前端 `POST /journal/resolve`，那条补上 `resolution: { at, landed, location }` |
+| **重启一次，journal 清零** | `ContextStore` 构造时读回 jsonl（后一行胜出：修正行与原行同 `at`） |
 
 `result` 因此只剩 `ok | failed`：`unconfirmed` 从没被写过，删掉了——"上游拒绝了但东西到位了"
 用 `resolution.landed` 说，比"不知道"精确。

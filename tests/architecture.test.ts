@@ -38,6 +38,7 @@ describe('module size', () => {
     'src/host/snapshot-cache.ts': 100,
     'src/host/action-route.ts': 60,
     'src/host/item-state-route.ts': 45,
+    'src/host/context-store.ts': 240,
     'src/bungie/profile.ts': 340,
     'src/host/stat-lines.ts': 80,
     'src/bungie/values.ts': 30,
