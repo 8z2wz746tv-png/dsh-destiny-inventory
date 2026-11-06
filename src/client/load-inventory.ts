@@ -57,11 +57,13 @@ function sameAccount(a: AccountIdentity, b: AccountIdentity): boolean {
  * @param deps - bridge path, overlay, sinks.
  * @param signal - caller-owned cancellation.
  * @param refresh - true when the user asked for Bungie's current answer.
+ * @param attempt - internal: how many times this load has retried itself.
  */
 export async function loadInventory(
   deps: LoadDeps,
   signal: AbortSignal,
   refresh: boolean,
+  attempt = 0,
 ): Promise<void> {
   const loadId = (loadSeq += 1)
   // A newer load owns the screen now; this one may still finish, but not paint.
@@ -102,6 +104,12 @@ export async function loadInventory(
     writeSnapshot(account, fresh)
   } catch (error) {
     if (stale()) return
+    // A page opened while the host is still starting gets one silent retry instead
+    // of an error the user has to clear by hand.
+    if (attempt === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500))
+      if (!signal.aborted) return loadInventory(deps, signal, refresh, 1)
+    }
     deps.onError(error instanceof Error ? error.message : String(error))
   }
 }

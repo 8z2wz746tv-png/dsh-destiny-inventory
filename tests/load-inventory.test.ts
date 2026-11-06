@@ -184,11 +184,23 @@ describe('account and load identity', () => {
     expect(h.painted.length).toBe(afterFast)
   })
 
+  it('retries once before reporting a failure', async () => {
+    const h = harness()
+    // The host may still be starting when a page opens; that is not an error yet.
+    api.fetchAccount.mockRejectedValueOnce(new Error('fetch failed')).mockResolvedValue(steam)
+    await loadInventory(h.deps, signal(), false)
+    expect(h.errors).toHaveLength(0)
+    expect(h.painted.length).toBeGreaterThan(0)
+  })
+
   it('reports an identity failure instead of painting a default account', async () => {
     const h = harness()
     api.fetchAccount.mockRejectedValue(new Error('token expired'))
     await loadInventory(h.deps, signal(), false)
     expect(h.painted).toHaveLength(0)
+    // Injectable violation: drop the second attempt and a page opened during host
+    // startup shows an error the user must clear by hand.
+    expect(api.fetchAccount).toHaveBeenCalledTimes(2)
     expect(h.errors[0]).toContain('token expired')
     expect(db.readSnapshot).not.toHaveBeenCalled()
   })

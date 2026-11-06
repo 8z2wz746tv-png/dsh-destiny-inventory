@@ -71,7 +71,10 @@ export function toFailure(error: unknown): { code: string; message: string } {
     const code =
       'code' in error && typeof error.code === 'string' ? error.code : error.name || 'BridgeError'
     // A bare upstream message is unreadable; name the next step instead.
-    return { code, message: `${error.message}（处理不了就重启 DSH 再试，宿主日志里有栈）` }
+    return {
+      code,
+      message: `${error.message}（连不上宿主，多半是它还在启动；一直这样再重启 DSH，日志里有栈）`,
+    }
   }
   return { code: 'BridgeError', message: String(error) }
 }
