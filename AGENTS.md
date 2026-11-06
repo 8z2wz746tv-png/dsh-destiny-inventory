@@ -4,6 +4,11 @@
 
 > 通用骨架见 `docs/CODING-STANDARDS.md`。两者冲突时以本文件为准（这里含项目落点）。
 
+> **当前冻结点（2026-11-07）**：`feat/consistency-p1` @ `c62af4e`，243 测试绿，`master` 未动。
+> **下一步三件事，做完之前不写代码**：重启宿主 → 复测满槽转移回执（应该出现「先腾出「XX」」）
+> → 观察 F5 在同步窗口内的实际表现（只记录，不改）。细节在 `docs/HANDOFF.md` 第零节，
+> 验收结论在 `docs/testing/P1-CONSISTENCY-ACCEPTANCE.md`。**这三件做完就把这段删掉。**
+
 ---
 
 ## 0. 总原则
