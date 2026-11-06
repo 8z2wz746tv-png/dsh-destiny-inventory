@@ -138,8 +138,8 @@ MCP 只服务随航 agent（分析、配装、模组），前端把"用户在看
 | `src/client/styles.ts` | 保留；`--dsw-alias-*` 已是正确姿势 |
 | `src/client/index.ts` | 注册从 `LegacyInventoryPanel` 切回 `InventoryPanel` |
 | `src/client/legacy/**` | **不再注册**；等自研视觉追平后删除 |
-| `src/mcp/inventory.ts`、`item.ts`、`queries.ts`、`types.ts` 的 UI 部分 | 废弃（MCP 只剩 agent 的事）；`src/mcp/client.ts` 保留给 journal/诊断用 |
-| `src/mcp/actions.ts` | 从前端调用链移除；MCP 的写入能力仍由 agent 使用 |
+| `src/mcp/inventory.ts`、`item.ts`、`queries.ts`、`types.ts` 的 UI 部分 | 废弃（MCP 只剩 agent 的事）。`client.ts` 原计划留给 journal/诊断，2026-11-06 查证**没有任何调用方**（agent 能力走 `ctx.tools`），整层已删 |
+| `src/mcp/actions.ts` | 从前端调用链移除；写入现在走自己的 `src/bungie/write.ts`，MCP 的写入能力仍由 agent 使用 |
 
 ## 6. 阶段
 

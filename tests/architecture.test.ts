@@ -67,9 +67,6 @@ describe('module size', () => {
     'src/bungie/write.ts': 210,
     'src/host/item-write.ts': 130,
     'src/client/receipts.ts': 40,
-    'src/mcp/envelope.ts': 80,
-    'src/mcp/client.ts': 110,
-    'src/mcp/types.ts': 260,
     'src/index.ts': 200,
   }
 
@@ -116,7 +113,7 @@ describe('retired paths stay retired', () => {
 
 describe('dependency direction', () => {
   /** A layer may only import from the layers below it. */
-  const LAYER: Record<string, number> = { client: 3, mcp: 2, host: 1, bungie: 0 }
+  const LAYER: Record<string, number> = { client: 3, host: 1, bungie: 0 }
 
   it('never imports upward', () => {
     const offenders: string[] = []

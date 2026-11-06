@@ -1,9 +1,9 @@
 /**
  * Profile + Manifest → the bridge's wire shape.
  *
- * The browser half already speaks `ItemRow` / `PlayerProfileView` (see
- * `src/mcp/types.ts`). This module produces exactly those, so switching the data
- * source does not change the frontend contract.
+ * The browser half speaks `ItemRow` / `PlayerProfileView`, declared next door in
+ * `host/types.ts`. This module produces exactly those, so switching the data source
+ * does not change the frontend contract.
  *
  * Degradation rule: a missing definition never becomes an empty string. The row
  * keeps the hash as a visible marker (`#1234`), the bucket keeps `bucket:5678`,

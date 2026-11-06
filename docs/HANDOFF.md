@@ -49,7 +49,10 @@
 
 ## 三、架构与文件地图
 
-依赖方向 `client → mcp → host → bungie`，**有守门测试**（`tests/architecture.test.ts` 的 `dependency direction`）。
+依赖方向 `client → host → bungie`，**有守门测试**（`tests/architecture.test.ts` 的 `dependency direction`）。
+
+**全部 65 个文件的一句话职责在 `AGENTS.md` §9**，这里只列改得最多的那批——
+要查某个文件干什么，去那张表，别在这里加重复清单。
 
 ### `src/bungie/` —— Bungie Platform 直连（7898 行总量，这里约 1100）
 
