@@ -165,9 +165,12 @@ export class PendingOps {
         transitions.push(...this.expire(operation, now))
         continue
       }
-      // A read issued before this operation cannot be evidence about it: it may
-      // have observed an earlier state, or a later operation's effect.
-      if (seen.startedAt < operation.submittedAt) continue
+      // A read issued *at or before* this operation cannot be evidence about it:
+      // it may have observed an earlier state, or a later operation's effect.
+      // Same-millisecond counts as "before" — two `Date.now()` values inside one
+      // millisecond cannot prove which happened first, and guessing is how a stale
+      // read gets to confirm a drag it never saw.
+      if (seen.startedAt <= operation.submittedAt) continue
       if (seen.location === operation.target) {
         this.ops.delete(operation.instanceId)
         transitions.push({

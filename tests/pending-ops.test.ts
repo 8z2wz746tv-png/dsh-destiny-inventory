@@ -107,6 +107,17 @@ describe('pending operations', () => {
     expect(ops.get('i1')?.mismatches).toBe(0)
   })
 
+  it('refuses a read issued in the same millisecond as the drag', () => {
+    const ops = new PendingOps()
+    ops.submit(op({ now: 5_000 }))
+    ops.settle('e1', 'accepted')
+    // Injectable violation: use `<` and this read — which may have been issued
+    // microseconds before the drag — is allowed to confirm it.
+    const transitions = ops.reconcile([{ instanceId: 'i1', location: 'warlock', startedAt: 5_000 }], 6_000)
+    expect(transitions).toEqual([])
+    expect(ops.get('i1')?.mismatches).toBe(0)
+  })
+
   it('lets an old read-back describe a newer operation without repainting it', () => {
     const ops = new PendingOps()
     ops.submit(op({ eventId: 'a', target: 'warlock', now: 1_000 })) // A: vault → warlock
