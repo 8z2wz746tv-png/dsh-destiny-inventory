@@ -21,14 +21,19 @@ const snapshot = (items: { instanceId: string; itemHash: number; characterId: st
 /** Capacity 10 / occupancy whatever the test passes, so the room check is inert unless tested. */
 const lookup = (itemCount = 99) => () => ({
   bucket: () => ({ hash: 1, name: '威能武器', category: null, location: 0, itemCount, hasTransferDestination: false }),
+  item: (hash: number) => ({ name: `物品${hash}`, tierType: 5 }),
 }) as never
 
-function deps(stub: ReturnType<typeof vi.fn>, items = [{ instanceId: 'i1', itemHash: 555, characterId: 'hunter' }]) {
+function deps(
+  stub: ReturnType<typeof vi.fn>,
+  items = [{ instanceId: 'i1', itemHash: 555, characterId: 'hunter' }],
+  itemCount = 99,
+) {
   return {
     client: { post: stub } as never,
     target: { membershipType: 3, membershipId: '42' },
     snapshot: async () => snapshot(items),
-    definitions: lookup(),
+    definitions: lookup(itemCount),
     invalidate: vi.fn(),
   }
 }
@@ -189,5 +194,23 @@ describe('runItemWrite', () => {
       (error: unknown) => error,
     )
     expect((failure as BridgeFault).message).toContain('仓库')
+  })
+
+  it('names the item it moved aside on a character-to-character hop', async () => {
+    const post = vi.fn(async () => ({}))
+    const d = deps(post, [
+      { instanceId: 'i1', itemHash: 555, characterId: 'char-hunter' },
+      // A full warlock slot: one of these has to leave before i1 can arrive, so it
+      // must look like a real movable row (source, transfer flag, not equipped).
+      { instanceId: 'w1', itemHash: 555, characterId: 'char-warlock', source: 'character-inventory', transferStatus: 0, equipped: false, locked: false },
+      { instanceId: 'w2', itemHash: 555, characterId: 'char-warlock', source: 'character-inventory', transferStatus: 0, equipped: false, locked: false },
+    ], 2)
+    const summary = await runItemWrite(d, {
+      kind: 'move', instanceId: 'i1', characterId: 'warlock', from: 'hunter',
+    })
+    // Injectable violation: return the plain two-hop sentence and the player never
+    // learns which of their items left the character to make room.
+    expect(summary).toContain('经仓库中转')
+    expect(summary).toContain('先腾出')
   })
 })

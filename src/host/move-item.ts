@@ -107,7 +107,7 @@ export async function moveItem(
       '仓库那边放不下了 —— 角色之间的转移必须先从仓库中转，先腾出一格仓库再试',
     )
     await attempt(() => transferItem(client, target, write.instanceId, itemHash, false, destination))
-    return '已移到角色背包（经仓库中转）'
+    return freed === null ? '已移到角色背包（经仓库中转）' : `已移到角色背包（经仓库中转，先腾出「${freed}」）`
   }
   await attempt(() => transferItem(client, target, write.instanceId, itemHash, false, destination))
   return freed === null ? '已移到角色背包' : `已移到角色背包（先腾出「${freed}」）`
