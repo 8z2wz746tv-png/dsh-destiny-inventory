@@ -8,7 +8,7 @@ import { BungieApiError } from '../bungie/client'
 import type { ProfileSnapshot } from '../bungie/profile'
 import { transferItem } from '../bungie/write'
 import type { ItemWrite } from '../bungie/write'
-import { ensureRoom } from './check-room'
+import { ensureRoom } from './make-room'
 import { CLASS_LOCATION } from './dto'
 import { BridgeFault } from './http'
 import type { WriteDeps } from './item-write'
@@ -96,7 +96,7 @@ export async function moveItem(
   // It goes out through the vault — the MCP's receipt says "via vault" for the same
   // reason.
   // Ask before spending a round trip: capacity and occupancy are both known here.
-  await ensureRoom(deps.definitions, snapshot, destination, bucketHash, where)
+  const freed = await ensureRoom(deps, destination, bucketHash, write.instanceId, where)
   if (write.from !== 'vault') {
     const owner = await ownerOf()
     // The vault is only a waypoint here, so "术士那边满了" would point at the wrong
@@ -110,5 +110,5 @@ export async function moveItem(
     return '已移到角色背包（经仓库中转）'
   }
   await attempt(() => transferItem(client, target, write.instanceId, itemHash, false, destination))
-  return '已移到角色背包'
+  return freed === null ? '已移到角色背包' : `已移到角色背包（先腾出「${freed}」）`
 }

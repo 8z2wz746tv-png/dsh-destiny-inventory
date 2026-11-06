@@ -13,7 +13,6 @@
  */
 import type { DefinitionLookup } from '../bungie/lookup'
 import type { ProfileSnapshot } from '../bungie/profile'
-import { BridgeFault } from './http'
 
 /**
  * Throw when the destination bucket cannot take one more item.
@@ -23,24 +22,24 @@ import { BridgeFault } from './http'
  * @param bucketHash - the item's classification bucket.
  * @param storeLabel - how the player names that character, for the message.
  */
-export async function ensureRoom(
+export async function hasRoom(
   definitions: () => DefinitionLookup,
   snapshot: () => Promise<ProfileSnapshot>,
   characterId: string,
   bucketHash: number,
-  storeLabel: string,
-): Promise<void> {
+): Promise<boolean | null> {
   const bucket = definitions().bucket(bucketHash)
   const capacity = bucket?.itemCount ?? null
   // No capacity published: say nothing rather than guess a number.
-  if (capacity === null || capacity <= 0) return
+  if (capacity === null || capacity <= 0) return null
   const current = await snapshot()
   const occupied = current.items.filter(
     (item) => item.characterId === characterId && item.bucketHash === bucketHash,
   ).length
-  if (occupied < capacity) return
-  throw new BridgeFault(
-    'DestinyNoRoomInDestination',
-    `${storeLabel}的${bucket?.name ?? '这个'}槽已经满了（${occupied}/${capacity}）：先在游戏里腾出一格，或者把里面的一件拖到别处`,
-  )
+  return occupied < capacity
+}
+
+/** The bucket's localized name, for a receipt. */
+export function bucketName(definitions: () => DefinitionLookup, bucketHash: number): string {
+  return definitions().bucket(bucketHash)?.name ?? '这个'
 }

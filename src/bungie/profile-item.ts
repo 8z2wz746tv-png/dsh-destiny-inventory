@@ -45,6 +45,8 @@ export function toItem(
     equipped: source === 'equipment',
     upstreamEquipped: instance?.isEquipped === true,
     locked: (num(raw.state) & 1) === 1,
+    /** 0 = transferable; anything else must not be moved (ADR-shaped guard). */
+    transferStatus: num(raw.transferStatus),
     crafted: (num(raw.state) & 8) === 8,
     masterwork: (num(raw.state) & 4) === 4,
     enhanced: (num(raw.state) & 32) === 32,

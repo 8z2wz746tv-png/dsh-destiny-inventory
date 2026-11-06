@@ -57,6 +57,8 @@ export interface ProfileItem {
   upstreamEquipped: boolean
   /** Player lock flag from the item's `state` bitfield (`DestinyItemState.Locked`). */
   locked: boolean
+  /** Bungie's `transferStatus`: `0` means it may be moved; anything else must not be. */
+  transferStatus: number
   /**
    * `state` bit 8: forged at the Relic.
    *
@@ -129,6 +131,8 @@ export interface RawItem {
   characterId?: string
   /** Bitfield: 1 = locked, 2 = tracked. */
   state?: number
+  /** 0 = may be moved; anything else must not be. */
+  transferStatus?: number
 }
 
 interface RawItemList {
