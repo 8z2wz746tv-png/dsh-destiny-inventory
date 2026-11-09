@@ -1,16 +1,16 @@
 /**
- * Pending operations: what the panel has asked for but Bungie has not confirmed.
+ * 面板要求过、Bungie 还没确认的操作。
  *
- * The four states this protects are described in `docs/plans/PLAN-CONSISTENCY-LAYER.md`.
- * The short version: a write that returns ok is an **intention accepted**, not a
- * position. Bungie's profile keeps reporting the old place for about a minute, so
- * any state that a refresh can overwrite will flip the item back in front of the user.
- *
- * This module is pure: no React, no fetch, no timers. Everything is decided from
- * arguments, so the rules below can be tested without a browser.
+ * 一次返回 ok 的写入是**被接受的意图**，不是一个位置——上游的 profile 会在约一分钟里
+ * 继续报旧位置，所以任何能被一次刷新抹掉的状态，都会把物品当着用户的面弹回去。
+ * 纯逻辑：没有 React、没有 fetch、没有计时器。
  */
 
 /** Where one operation is in its life. */
+import { restoreInto } from './pending-ops-restore'
+import type { RestorableOperation } from './operation-chain'
+import { SettledIds } from './settled-ids'
+
 export type OperationState =
   | 'submitted'
   | 'succeeded'
@@ -70,14 +70,7 @@ export interface Transition {
 /** How long an operation may stay unsettled before it is `unknown`. */
 export const VERIFY_TTL_MS = 5 * 60_000
 
-/**
- * Decide whether a bridge failure proves the write did not run.
- *
- * The distinction matters: `DestinyNoRoomInDestination` is Bungie saying no, while
- * a dropped connection says nothing at all. Treating the second as a failure is how
- * "it actually landed" became a lie in the P0 run.
- * @param code - the bridge's `error.code`.
- */
+/** 判断一次桥接失败能不能证明"没执行"——`DestinyNoRoom` 是上游拒绝，断线什么也没说。 */
 export function classifyFailure(code: string): 'rejected' | 'unclear' {
   if (code === 'BadRequest' || code === 'NotFound' || code === 'AUTH_UNAVAILABLE') return 'rejected'
   // Upstream said no by name; e.g. `DestinyNoRoomInDestination`.
@@ -89,6 +82,8 @@ export class PendingOps {
   private readonly ops = new Map<string, PendingOperation>()
   /** Highest seq ever handed out per instance, so it never repeats. */
   private readonly seqs = new Map<string, number>()
+  /** 已经结束的操作；恢复时要靠它区分"没恢复过"和"恢复过、有答案了"。 */
+  private readonly settled = new SettledIds()
 
   /**
    * Register an operation the moment it is queued.
@@ -104,6 +99,9 @@ export class PendingOps {
     now: number
     ttlMs?: number
   }): PendingOperation {
+    // 被新操作取代的旧意图也就此结束：它的意图不再是有效的，不能等下次刷新再复活。
+    const previous = this.ops.get(input.instanceId)
+    if (previous !== undefined) this.settled.add(previous.eventId)
     const seq = (this.seqs.get(input.instanceId) ?? 0) + 1
     this.seqs.set(input.instanceId, seq)
     const operation: PendingOperation = {
@@ -133,8 +131,7 @@ export class PendingOps {
     const operation = this.find(eventId)
     if (operation === undefined) return null
     if (outcome === 'rejected') {
-      // Definitely did not run: stop drawing an intention that upstream refused.
-      this.ops.delete(operation.instanceId)
+      this.retire(operation) // 明确没执行：不再画一个上游拒绝过的意图
       return { eventId, instanceId: operation.instanceId, kind: 'failed' }
     }
     operation.state = outcome === 'accepted' ? 'succeeded' : 'verifying'
@@ -172,7 +169,7 @@ export class PendingOps {
       // read gets to confirm a drag it never saw.
       if (seen.startedAt <= operation.submittedAt) continue
       if (seen.location === operation.target) {
-        this.ops.delete(operation.instanceId)
+        this.retire(operation)
         transitions.push({
           eventId: operation.eventId,
           instanceId: operation.instanceId,
@@ -186,7 +183,7 @@ export class PendingOps {
       if (operation.state === 'unknown' && operation.mismatches >= 2) {
         // It settled somewhere else, twice over. The intention stops controlling
         // the grid, but the record stays.
-        this.ops.delete(operation.instanceId)
+        this.retire(operation)
         transitions.push({
           eventId: operation.eventId,
           instanceId: operation.instanceId,
@@ -200,17 +197,21 @@ export class PendingOps {
     return transitions
   }
 
-  /** The operation currently governing one item, if any. */
+  restore(input: RestorableOperation): boolean { // 规则见 `pending-ops-restore.ts`
+    return restoreInto(this.ops, this.seqs, this.settled, input)
+  }
+
+  /** 当前控制这件物品的操作。 */
   get(instanceId: string): PendingOperation | undefined {
     return this.ops.get(instanceId)
   }
 
-  /** Everything still unsettled, for rendering. */
+  /** 还没结束的操作，给渲染用。 */
   all(): Map<string, PendingOperation> {
     return new Map(this.ops)
   }
 
-  /** How many operations are still governing the grid. */
+  /** 有几条还在控制界面。 */
   get size(): number {
     return this.ops.size
   }
@@ -221,6 +222,12 @@ export class PendingOps {
     return [
       { eventId: operation.eventId, instanceId: operation.instanceId, kind: 'unknown' },
     ]
+  }
+
+  /** 移除一条操作，并记住它已经有结论。 */
+  private retire(operation: PendingOperation): void {
+    this.settled.add(operation.eventId)
+    this.ops.delete(operation.instanceId)
   }
 
   private find(eventId: string): PendingOperation | undefined {
