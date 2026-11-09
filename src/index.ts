@@ -56,6 +56,9 @@ export function apply(ctx: Context, config: ConfigShape): void {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')
       const query = url.pathname.slice(config.routePath.length) || '/'
 
+      // 前端恢复跨刷新的意图要读 journal。只读、只给最近一段：恢复窗口是 5 分钟。
+      if (query === '/journal') return sendJson(res, 200, { ok: true, data: context.recent(200) } satisfies BridgeResponse<unknown>)
+
       if (query === '/context') {
         if (req.method !== 'POST') {
           sendJson(res, 405, { ok: false, error: { code: 'MethodNotAllowed', message: 'POST only' } })

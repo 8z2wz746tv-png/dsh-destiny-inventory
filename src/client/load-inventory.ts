@@ -17,6 +17,7 @@
  */
 import { fetchAccount, fetchCharacters, fetchInventory } from './api'
 import { applyOverlay, compareSnapshot } from './pending-ops-render'
+import { restoreIntents } from './restore-intents'
 import { readSnapshot, writeSnapshot } from './snapshot-db'
 import type { PendingOps } from './pending-ops'
 import type { AccountIdentity, InventorySnapshot, PlayerProfileView } from '../host/types'
@@ -24,13 +25,7 @@ import type { AccountIdentity, InventorySnapshot, PlayerProfileView } from '../h
 /** Which load is allowed to touch the screen. Increments on every call. */
 let loadSeq = 0
 
-/**
- * Stand-in for the cached paint, which carries no characters.
- *
- * The header (name, triumph) stays blank until the network answers — about a second,
- * measured. Storing the profile alongside the snapshot would fill it in, but the
- * cache would then have two things to keep consistent instead of one.
- */
+/** 缓存那一趟没有角色信息：头顶的姓名与凯旋分空着，约一秒后被网络答案填上。 */
 const NO_PROFILE: PlayerProfileView = {
   displayName: '',
   membershipId: '',
@@ -81,9 +76,12 @@ export async function loadInventory(
         // Painted, never reconciled: the overlay still wins, the cache never votes.
         const items = applyOverlay(cached.items, deps.pending.all())
         deps.onSnapshot({ ...cached, items }, NO_PROFILE)
-        // Two numbers matter here and nowhere else: when the first rows painted,
-        // and when they were replaced by a real read. Both in the browser's clock.
         console.info(`[destiny] 缓存上屏 ${Math.round(performance.now() - startedAt)}ms`)
+        // 上次会话里提交过、还没结论的操作挂回来，再画一遍。**只看 journal**，不碰刚上屏的
+        // 缓存——拿它判断"到没到"，就是让过期观测冒充核验。
+        if ((await restoreIntents(deps.routePath, deps.pending, signal)) > 0 && !stale()) {
+          deps.onSnapshot({ ...cached, items: applyOverlay(cached.items, deps.pending.all()) }, NO_PROFILE)
+        }
       }
     }
 

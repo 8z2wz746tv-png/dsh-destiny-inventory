@@ -1,3 +1,4 @@
+import type { JournalLine } from './journal-reduce'
 import type {
   AccountIdentity,
   ActionReceipt,
@@ -49,15 +50,15 @@ export async function readBridge<T>(url: string, signal: AbortSignal): Promise<T
   return body.data
 }
 
-/**
- * Read the account header and characters.
- * @param routePath - bridge base pathname, as configured on the host half.
- * @param signal - caller-owned cancellation.
- */
 /** Which account the bridge is signed in as. Cheap on purpose: the panel must know
  * whose cache to read before it may paint, not after a profile read. */
 export function fetchAccount(routePath: string, signal: AbortSignal): Promise<AccountIdentity> {
   return readBridge<AccountIdentity>(`${routePath}/account`, signal)
+}
+
+/** Recent journal entries, newest first. */
+export function fetchJournal(routePath: string, signal: AbortSignal): Promise<JournalLine[]> {
+  return readBridge<JournalLine[]>(`${routePath}/journal`, signal)
 }
 
 export function fetchCharacters(routePath: string, signal: AbortSignal): Promise<PlayerProfileView> {
