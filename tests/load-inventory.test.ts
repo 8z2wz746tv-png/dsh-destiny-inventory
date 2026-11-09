@@ -278,4 +278,28 @@ describe('the restore step inside the load', () => {
     await loadInventory(h.deps, signal(), true)
     expect(restoreMod.restoreIntents).not.toHaveBeenCalled()
   })
+
+  it('restores even when there is no cache to paint', async () => {
+    const h = harness()
+    db.readSnapshot.mockResolvedValue(null)
+    restoreMod.restoreIntents.mockImplementation(async (_path, pending) => {
+      pending.restore({
+        entryId: 'restore:1:i1', instanceId: 'i1', target: 'warlock', from: 'vault',
+        submittedAt: Date.now() - 1_000, expiresAt: Date.now() + 60_000,
+      })
+      return 1
+    })
+    api.fetchInventory.mockImplementation(
+      () => new Promise((resolve) =>
+        setTimeout(() => resolve(snapshot(steam, {
+          items: [{ instanceId: 'i1', locationKey: 'warlock', characterId: 'warlock', placement: { kind: 'inventory', characterId: 'warlock' }, equipped: 'not_equipped' } as never],
+        })), 20),
+      ),
+    )
+    await loadInventory(h.deps, signal(), false)
+    // Injectable violation: restore inside the cache branch and a first visit — no
+    // cache yet — silently loses an intent that the journal still holds.
+    expect(restoreMod.restoreIntents).toHaveBeenCalled()
+    expect((h.painted[0]?.items[0] as { locationKey: string }).locationKey).toBe('warlock')
+  })
 })

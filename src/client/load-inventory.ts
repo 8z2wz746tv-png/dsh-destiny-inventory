@@ -70,18 +70,20 @@ export async function loadInventory(
     const account = await fetchAccount(deps.routePath, signal)
     if (stale()) return
 
+    let cached: InventorySnapshot | null = null
     if (!refresh) {
-      const cached = await readSnapshot(account)
+      cached = await readSnapshot(account)
       if (cached !== null && !stale()) {
         // Painted, never reconciled: the overlay still wins, the cache never votes.
-        const items = applyOverlay(cached.items, deps.pending.all())
-        deps.onSnapshot({ ...cached, items }, NO_PROFILE)
+        deps.onSnapshot({ ...cached, items: applyOverlay(cached.items, deps.pending.all()) }, NO_PROFILE)
         console.info(`[destiny] 缓存上屏 ${Math.round(performance.now() - startedAt)}ms`)
-        // 上次会话里提交过、还没结论的操作挂回来，再画一遍。**只看 journal**，不碰刚上屏的
-        // 缓存——拿它判断"到没到"，就是让过期观测冒充核验。
-        if ((await restoreIntents(deps.routePath, deps.pending, signal)) > 0 && !stale()) {
-          deps.onSnapshot({ ...cached, items: applyOverlay(cached.items, deps.pending.all()) }, NO_PROFILE)
-        }
+      }
+    }
+    // 恢复和缓存**没有关系**：journal 是独立的事实源。没有缓存时也要恢复，只是没东西可重画，
+    // 挂回去的意图会在网络答案到达时由 `reconcile` 用上。
+    if (!refresh && !stale() && (await restoreIntents(deps.routePath, deps.pending, signal)) > 0) {
+      if (cached !== null && !stale()) {
+        deps.onSnapshot({ ...cached, items: applyOverlay(cached.items, deps.pending.all()) }, NO_PROFILE)
       }
     }
 
