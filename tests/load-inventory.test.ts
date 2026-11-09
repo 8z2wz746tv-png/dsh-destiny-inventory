@@ -15,9 +15,13 @@ vi.mock('../src/client/snapshot-db', () => ({
   readSnapshot: vi.fn(),
   writeSnapshot: vi.fn(),
 }))
+vi.mock('../src/client/restore-intents', () => ({ restoreIntents: vi.fn(async () => 0) }))
 
 const api = (await import('../src/client/api')) as unknown as Record<string, ReturnType<typeof vi.fn>>
 const db = (await import('../src/client/snapshot-db')) as unknown as Record<string, ReturnType<typeof vi.fn>>
+const restoreMod = (await import('../src/client/restore-intents')) as unknown as {
+  restoreIntents: ReturnType<typeof vi.fn>
+}
 const { loadInventory } = await import('../src/client/load-inventory')
 const { PendingOps } = await import('../src/client/pending-ops')
 
@@ -77,6 +81,7 @@ const signal = () => new AbortController().signal
 
 beforeEach(() => {
   vi.clearAllMocks()
+  restoreMod.restoreIntents.mockResolvedValue(0)
   api.fetchAccount.mockResolvedValue(steam)
   api.fetchCharacters.mockResolvedValue(profile)
   api.fetchInventory.mockResolvedValue(snapshot(steam))
@@ -225,5 +230,52 @@ describe('account and load identity', () => {
     // never refreshed, with no indication anything went wrong.
     expect(h.painted).toHaveLength(0)
     expect(h.errors).toHaveLength(1)
+  })
+})
+
+describe('the restore step inside the load', () => {
+  it('repaints from the same cached rows once an intent comes back', async () => {
+    const h = harness()
+    db.readSnapshot.mockResolvedValue(snapshot(steam))
+    restoreMod.restoreIntents.mockImplementation(async (_path, pending) => {
+      pending.restore({
+        entryId: 'restore:1:i1',
+        instanceId: 'i1',
+        target: 'warlock',
+        from: 'vault',
+        submittedAt: Date.now() - 1_000,
+        expiresAt: Date.now() + 60_000,
+      })
+      return 1
+    })
+    api.fetchInventory.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(snapshot(steam)), 30)),
+    )
+
+    const loading = loadInventory(h.deps, signal(), false)
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    // Cached paint first, then the restored one — both before the network answers.
+    expect(h.painted).toHaveLength(2)
+    expect((h.painted[0]?.items[0] as { locationKey: string }).locationKey).toBe('vault')
+    expect((h.painted[1]?.items[0] as { locationKey: string }).locationKey).toBe('warlock')
+    await loading
+  })
+
+  it('does not repaint when nothing came back', async () => {
+    const h = harness()
+    db.readSnapshot.mockResolvedValue(snapshot(steam))
+    api.fetchInventory.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(snapshot(steam)), 20)),
+    )
+    const loading = loadInventory(h.deps, signal(), false)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(h.painted).toHaveLength(1)
+    await loading
+  })
+
+  it('never restores on a forced refresh', async () => {
+    const h = harness()
+    await loadInventory(h.deps, signal(), true)
+    expect(restoreMod.restoreIntents).not.toHaveBeenCalled()
   })
 })
