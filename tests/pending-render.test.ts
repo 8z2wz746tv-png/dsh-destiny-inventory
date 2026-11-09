@@ -39,10 +39,11 @@ describe('compareSnapshot', () => {
     expect(observation).toEqual({ instanceId: 'a', location: 'vault', startedAt: 42 })
   })
 
-  it('marks an item missing from the read as unknown location', () => {
+  it('produces no observation for an item missing from the read', () => {
     const pending = new PendingOps()
     move(pending)
-    expect(compareSnapshot([], pending.all(), 1)[0]?.location).toBe('')
+    // 看不到不等于"它在别处"：产生一条空位置的观测，会把它算成一次不一致。
+    expect(compareSnapshot([], pending.all(), 1)).toEqual([])
   })
 })
 

@@ -19,11 +19,11 @@ export function compareSnapshot(
   issuedAt: number,
 ): Observation[] {
   const byId = new Map(rows.map((row) => [row.instanceId, row.locationKey]))
-  return [...ops.values()].map((operation) => ({
-    instanceId: operation.instanceId,
-    location: byId.get(operation.instanceId) ?? '',
-    startedAt: issuedAt,
-  }))
+  // 快照里没有这件物品时不产生观测：看不到不等于"它在别处"。
+  return [...ops.values()].flatMap((operation) => {
+    const location = byId.get(operation.instanceId)
+    return location === undefined ? [] : [{ instanceId: operation.instanceId, location, startedAt: issuedAt }]
+  })
 }
 
 /**

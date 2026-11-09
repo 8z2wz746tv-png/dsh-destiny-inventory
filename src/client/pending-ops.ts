@@ -34,7 +34,7 @@ export interface PendingOperation {
   from: string | null
   state: OperationState
   submittedAt: number
-  /** Last time a read was compared against `target`. */
+  /** 最近一次**采信**观测的 `startedAt`；兼作去重键，同一份快照第二次直接跳过。 */
   checkedAt: number
   /** Past this instant, still mismatching means `unknown`. */
   expiresAt: number
@@ -121,12 +121,7 @@ export class PendingOps {
     return operation
   }
 
-  /**
-   * Apply the bridge's answer.
-   * @param eventId - which operation answered.
-   * @param outcome - accepted, definitely rejected, or unclear.
-   * @returns a transition when the answer removed the overlay.
-   */
+  /** 桥接的回答：接受 / 明确拒绝 / 结果不明。拒绝会移除 overlay。 */
   settle(eventId: string, outcome: Outcome): Transition | null {
     const operation = this.find(eventId)
     if (operation === undefined) return null
@@ -167,7 +162,8 @@ export class PendingOps {
       // Same-millisecond counts as "before" — two `Date.now()` values inside one
       // millisecond cannot prove which happened first, and guessing is how a stale
       // read gets to confirm a drag it never saw.
-      if (seen.startedAt <= operation.submittedAt) continue
+      if (seen.startedAt <= operation.checkedAt) continue
+      operation.checkedAt = seen.startedAt
       if (seen.location === operation.target) {
         this.retire(operation)
         transitions.push({
@@ -179,7 +175,6 @@ export class PendingOps {
         continue
       }
       operation.mismatches += 1
-      operation.checkedAt = now
       if (operation.state === 'unknown' && operation.mismatches >= 2) {
         // It settled somewhere else, twice over. The intention stops controlling
         // the grid, but the record stays.
