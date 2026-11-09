@@ -26,13 +26,13 @@ const lookup = (itemCount = 99) => () => ({
 
 function deps(
   stub: ReturnType<typeof vi.fn>,
-  items = [{ instanceId: 'i1', itemHash: 555, characterId: 'hunter' }],
+  items: Array<Record<string, unknown>> = [{ instanceId: 'i1', itemHash: 555, characterId: 'hunter' }],
   itemCount = 99,
 ) {
   return {
     client: { post: stub } as never,
     target: { membershipType: 3, membershipId: '42' },
-    snapshot: async () => snapshot(items),
+    snapshot: async () => snapshot(items as never),
     definitions: lookup(itemCount),
     invalidate: vi.fn(),
   }

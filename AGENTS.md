@@ -213,6 +213,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/InventoryPanel.tsx` | 面板主体：状态、拖拽、行渲染。**贴着 450 上限**，新逻辑往 hook 里放。 |
 | `src/client/use-item-actions.ts` | 动作编排：`move`/`equip`/`lock` 进队列、回执、失败回读。面板只调它。 |
 | `src/client/write-queue.ts` | 客户端写队列：串行、同物品未启动的 move 被替换、可取消。**纯逻辑，不碰 React**。 |
+| `src/client/journal-reduce.ts` | journal 的**折叠**（不是去重）：同一操作的两行（原始 + resolution）合成一条，保留最终态。**纯逻辑**。 |
 | `src/client/pending-ops.ts` | **未核验的操作**：状态机、每物品序号、观测折叠、失败分类。没确认的操作不许被快照抹掉。**纯逻辑**。 |
 | `src/client/pending-ops-render.ts` | 把 rows 画过 overlay：未核验的行保持目标位置。**纯函数，只出 rows**。 |
 | `src/client/send-action.ts` | 一次写从发出到落定：接受/拒绝/不明三路分流。**拒绝恢复原位，不明才回读**。 |
