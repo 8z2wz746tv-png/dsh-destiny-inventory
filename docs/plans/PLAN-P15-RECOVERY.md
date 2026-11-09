@@ -114,6 +114,19 @@ expiresAt   = entry.at + VERIFY_TTL_MS
 顺带澄清 `VERIFY_TTL_MS` 的性质：它是**清理机制**（把悬而不决的操作收进 `unknown`），
 不是"操作失败"的判据。`unknown` 之后还有 `superseded` 兜底。
 
+**到期之后会发生什么，要说全**（初稿只说了"转 unknown"）：
+
+1. 到期**不删除** Pending，只是把状态从 `verifying` 换成 `unknown`——界面继续显示目标位置，
+   但带"未确认"标记，不声称成功。
+2. `unknown` 的操作**仍然参与** `reconcile`。如果之后哪怕一次新鲜快照与目标一致，
+   它照样转 `verified` 并移除。**迟到的正确观测可以翻案**，这是允许的、也是对的。
+3. 如果连续两次观测都稳定地落在别的、新的位置，转 `superseded` 并停止控制界面。
+
+**竞态**：`reconcile` 是同步函数，到期判断与观测比对在同一个调用里顺序执行——
+先看这次有没有一致观测（有就直接 `verified`），再考虑过期。所以不存在"同一时刻既过期又被确认"。
+这个顺序在实施时必须保持：**先核验，后过期**。反过来的话，一条本该被这次读确认的操作会先被判成
+`unknown`，白白多挂一轮。
+
 ### 幂等：两层，不能只靠"只读"
 
 初稿写"恢复只读 journal，天然幂等"。**这个推导不成立。**
@@ -125,6 +138,17 @@ expiresAt   = entry.at + VERIFY_TTL_MS
 所以幂等要在内存层单独保证：
 
 - **稳定的身份**：`eventId = restore:<at>:<instanceId>`。同一条记录永远是同一个 id。
+
+  这个复合键够不够稳，查过真实数据（54 条 move 记录）：
+
+  - `(at, instanceId)` 在 jsonl 里**看起来重复**——那是同一条记录的原始行与它的
+    `resolution` 修正行（append-only 的第二行）。**按 `(at, instanceId)` 去重即得一条操作。**
+  - 同一物品两次**不同**操作之间的最小间隔是秒级（写入串行，中间隔着一次网络往返），
+    不存在同一毫秒产生两条不同 move 的可能。
+  - `external` 来源的记录会出现同毫秒多条（`detect-external` 一轮记多条），但它们不参与恢复。
+
+  所以这层唯一性成立**有前提**：只对 `source === 'ui'` 的 move 生效，且读取时必须先按
+  `(at, instanceId)` 去重。前提变了（比如以后写队列改成并行），这个键就要重新论证。
 - **已经在场就不动**：`restore` 进来先看这个物品当下的 operation——
   - 没有 → 创建
   - 有，且 `eventId` 相同 → **什么都不做**（不重置 `submittedAt`、不重新分配 `seq`）
@@ -154,6 +178,46 @@ expiresAt   = entry.at + VERIFY_TTL_MS
 | 恢复 lock / equip | 它们没有"目标位置"这个可展示的意图 |
 | 跨设备恢复 | 缓存和 overlay 都是浏览器本地的；换设备等于换一个人 |
 | 持久化 overlay 本身 | 恢复从 journal 读即可，不需要第三份状态 |
+
+## 六点五、七种链形状的完整状态转移
+
+一张表把「输入 → 恢复什么 → Pending → 界面 → 之后」串起来。**这是实施前的最后一道关**：
+每一行都要能对应到代码里的一个分支，对应不上的就是没定义清楚。
+
+前提：链按 `at` 升序、同一物品、`source` 都是 `ui`、只考虑 `move`。
+
+| # | 链（最后一条在右） | 恢复 | Pending 状态 | `effectiveLocation` | 界面 | 之后 reconcile |
+|---|---|---|---|---|---|---|
+| 1 | `A(ok, 无 resolution, 未超期)` | A | `verifying`，`submittedAt=A.at` | `A.to` | 目标位置 + 未确认环 | 观测==`A.to` → `verified`，环消失；一直不等 → `unknown` → `superseded` |
+| 2 | `A(ok) → B(failed)` | A | `verifying`（同 #1） | `A.to` | 目标位置 + 未确认环 | 同 #1。B 的存在**不改变**任何一格 |
+| 3 | `A(ok) → B(ok)` | 只 B | `verifying`，`submittedAt=B.at` | `B.to` | B 的目标 + 环 | 观测==`B.to` → `verified`。A 不进 Pending、不产生转换 |
+| 4 | `A(failed)`（之前无 ok） | 无 | 空 | `observed` | 观测位置，无环 | 无 |
+| 5 | `A(ok, 已有 resolution)` | 无 | 空 | `observed` | 观测位置，无环 | 无（结论已由 resolution 给出） |
+| 6 | `A(ok, 已超期)` | 无 | 空 | `observed` | 观测位置，无环 | 无 |
+| 7 | `A(external)` | 无 | 空 | `observed` | 观测位置，无环 | 无 |
+
+恢复之后用户又拖一次（记作 C），是这七行之外最需要写清的一格：
+
+| 情形 | Pending | `effectiveLocation` | 之后 |
+|---|---|---|---|
+| 恢复 A 后，用户拖 C（从 `A.to` 出发） | 被 C 覆盖（`seq` 更大，`eventId` 不同） | `C.to` | 观测==`C.to` → `verified`。A 不再有 Pending，也不再产生转换 |
+| C 写入被明确拒绝 | 空（C 被 settle 移除） | **`C.from`**（= `A.to`），**且应带 `pending: 'unconfirmed'`** | 见下面的漏洞说明；下次 F5 时 A 会被重新恢复成 `verifying` |
+| C 的结果不明（超时） | `C` 转 `verifying` | `C.to` | 走既有回读；回读一致 → `verified` |
+
+### 这张表要守的不变量
+
+每条都能用一条测试钉住，实施时逐条对照：
+
+1. 同一物品在 `PendingOps` 里**最多一条** operation。
+2. 恢复过程**不产生任何 Bungie 写请求**（可用「恢复期间 `postAction` 零调用」断言）。
+3. 恢复**不重置** `submittedAt`（用 4m50s 那条例验：恢复后剩余时间约 10s，不是 5 分钟）。
+4. 旧操作的观测**不能结束**新操作的 Pending（`startedAt <= submittedAt` + `eventId` 认领）。
+5. **缓存不产生 `verified`**（缓存那一趟根本不调 `reconcile`）。
+6. **失败操作不被"过滤后让旧操作上位"**：判据永远是链末尾，不是过滤结果。
+7. **Pending 消失 ≠ Bungie 已核验**：`failed` 移除 Pending，但那是"确定没执行"，不是"确认到位"。
+
+第 6、7 条是这次修订的核心，也是最容易在实现里悄悄退化的两条——
+它们不会让测试变红，只会让语义慢慢变回"过滤器"。
 
 ## 七、验收（实施后要跑）
 
