@@ -215,15 +215,15 @@ export class ManifestStore {
   private counts: { itemCount: number; bucketCount: number } | undefined
   /** Localized damage-type names, keyed by `defaultDamageType` enum value. */
   private readonly damageTypes = new Map<number, { name: string; icon: string }>()
-  /** 能量元素名（懒加载）。 */
-  private readonly energyTypes = new EnergyTypeNames(this.db)
-  private readonly sets = new ItemSets(this.db)
+  private lazy: { energy: EnergyTypeNames; sets: ItemSets } | null = null // 首次使用时才构造
+  private get armor(): { energy: EnergyTypeNames; sets: ItemSets } {
+    return (this.lazy ??= { energy: new EnergyTypeNames(this.db), sets: new ItemSets(this.db) })
+  }
 
   constructor(dbPath: string) {
     this.dbPath = dbPath
-    // `DatabaseSync` reports an absent file as a generic sqlite error, so check
-    // for existence first — "we never had it" and "we cannot open it" are
-    // different operator actions.
+    // `DatabaseSync` 对不存在的文件只报通用 sqlite 错误，所以先查存在性：
+    // 「从来没有」和「打不开」是两种不同的运维动作。
     if (!existsSync(dbPath)) {
       this.failure = 'missing'
       this.db = null
@@ -272,8 +272,8 @@ export class ManifestStore {
     return this.damageTypeInfo(enumValue).icon
   }
 
-  energyType(hash: number | null): string { return this.energyTypes.name(hash) }
-  armorSet(itemHash: number): ArmorSet | null { return this.sets.of(itemHash) }
+  energyType(hash: number | null): string { return this.armor.energy.name(hash) }
+  armorSet(itemHash: number): ArmorSet | null { return this.armor.sets.of(itemHash) }
 
   private damageTypeInfo(enumValue: number | null): { name: string; icon: string } {
     const empty = { name: '', icon: '' }
@@ -292,7 +292,7 @@ export class ManifestStore {
     return this.damageTypes.get(enumValue) ?? empty
   }
 
-  /** 图标角标（锻造/品阶），来自 `DestinyInventoryItemConstantsDefinition`。 */
+  /** 锻造与品阶的角标，来自 `DestinyInventoryItemConstantsDefinition`。 */
   iconOverlays(): { crafted: string; craftedBackground: string; tiers: string[] } {
     const empty = { crafted: '', craftedBackground: '', tiers: [] as string[] }
     if (this.db === null) return empty
