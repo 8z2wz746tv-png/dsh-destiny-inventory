@@ -37,7 +37,7 @@ const row = (locationKey: string): ItemRow =>
     placement: locationKey === 'vault' ? { kind: 'vault' } : { kind: 'inventory', characterId: locationKey },
     equipped: 'not_equipped',
     locked: false,
-  }) as ItemRow
+  }) as unknown as ItemRow
 
 /** 面板那份状态，形状与 `InventoryPanel` 的 `LoadState.ready` 一致。 */
 interface PanelState {
@@ -89,7 +89,7 @@ describe('P1 · 一次拖拽走完全程，两份数据各走各的路', () => {
 
     // 2) 乐观移动：渲染行去 warlock，观测纹丝不动。
     h.pending.submit({ eventId: 'e1', instanceId: 'i1', action: 'move', target: 'warlock', from: 'vault', now: Date.now() })
-    h.patchRows((rows) => applyMove(rows, 'i1', 'warlock', false))
+    h.patchRows((rows) => applyMove(rows, 'i1', 'warlock'))
     h.patchRows((rows) => applyOverlay(rows, h.pending.all()))
     expect(where(h.state.rendered)).toBe('warlock')
     // Injectable violation: rebuild `observed` from `rendered` here and Bungie's answer

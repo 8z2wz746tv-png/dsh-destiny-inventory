@@ -22,7 +22,7 @@ const observed = (): ItemRow[] => [
     placement: { kind: 'vault' },
     equipped: 'not_equipped',
     locked: false,
-  } as ItemRow,
+  } as unknown as ItemRow,
 ]
 
 const where = (rows: ItemRow[]) => rows[0]?.locationKey
@@ -48,7 +48,7 @@ describe('P0 · 渲染投影不污染原始观测', () => {
 
   it('an optimistic move does not move the observation', () => {
     const raw = observed()
-    expect(where(applyMove(raw, 'i1', 'warlock', false))).toBe('warlock')
+    expect(where(applyMove(raw, 'i1', 'warlock'))).toBe('warlock')
     expect(where(raw)).toBe('vault')
   })
 

@@ -1,21 +1,29 @@
 #!/usr/bin/env bash
 # 退化注入：确认测试能识别某个错误实现。
 #
-# 两次断言，缺一不可：
-#   1) 目标代码**确实**被改成了预期内容（没改成的注入，测试结果没有证明力）；
-#   2) 恢复后工作树必须和注入前一致（注入脚本自己不许留手尾）。
+# 两道断言，缺一不可：
+#   1) 目标代码里**确实**有要替换的那段（多行也算），否则这次注入什么都没测到；
+#   2) 替换之后那段**确实**没了，否则说明替换没落到预期位置。
+# 两步都过才跑测试。注入没生效时的测试结果没有证明力。
 #
-# 用法: scripts/mutate.sh <file> <expected-original> <wrong-version> [test-file]
+# 用法: scripts/mutate.sh <file> <expected-original> <replacement-or-empty> [tests]
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 FILE=${1:?file}
 ORIGINAL=${2:?original text}
-MUTANT=${3:?mutant text}
+MUTANT=${3-}          # 空表示"删掉这段"
 TESTS=${4:-tests}
 
-# 前置断言：原文必须存在，否则说明代码已经变了，这次注入什么都没测到。
-if ! grep -Fq "$ORIGINAL" "$FILE"; then
+exists() {
+  python3 - "$FILE" "$ORIGINAL" <<'PY'
+import sys
+from pathlib import Path
+sys.exit(0 if sys.argv[2] in Path(sys.argv[1]).read_text() else 1)
+PY
+}
+
+if ! exists; then
   echo "ABORT: target text not found in $FILE" >&2
   echo "       注入没有生效，后面的测试结果没有证明力。" >&2
   exit 2
@@ -28,12 +36,10 @@ python3 - "$FILE" "$ORIGINAL" "$MUTANT" <<'PY'
 import sys
 from pathlib import Path
 path, original, mutant = sys.argv[1], sys.argv[2], sys.argv[3]
-text = Path(path).read_text()
-Path(path).write_text(text.replace(original, mutant, 1))
+Path(path).write_text(Path(path).read_text().replace(original, mutant, 1))
 PY
 
-# 后置断言：文件真的变了。grep 原文还在就说明替换没落到预期位置。
-if grep -Fq "$ORIGINAL" "$FILE"; then
+if exists; then
   echo "ABORT: mutation did not take effect in $FILE" >&2
   exit 3
 fi
