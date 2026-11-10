@@ -60,6 +60,8 @@ export function settleMove(
  * @param instanceId - which item.
  * @param destination - `vault` or a character location key.
  * @param equipped - whether Bungie says it is worn.
+ * @param source - 这个位置是什么：`observed`（Bungie 说的）/ `rollback`（失败操作推出来的）。
+ *   **两者都会改行的位置，但只有前者能让那格不戴未确认标记。**
  * @returns the rows with the confirmed position.
  */
 export function confirmMove(
@@ -67,6 +69,7 @@ export function confirmMove(
   instanceId: string,
   destination: string,
   equipped: boolean,
+  source: 'observed' | 'rollback' = 'observed',
 ): ItemRow[] {
   return rows.map((row) => {
     if (row.instanceId !== instanceId) return row
@@ -82,7 +85,9 @@ export function confirmMove(
           : { kind: 'inventory', characterId: destination },
       characterId: toVault ? null : destination,
       equipped: equipped ? 'equipped' : 'not_equipped',
-      pending: undefined,
+      // 回滚位置不是观测：它必须带着"未确认"，否则格子说一个地方、详情卡（读快照）说另一个，
+      // 两边都不提这位置是失败留下的。
+      pending: source === 'rollback' ? 'unconfirmed' : undefined,
     }
   })
 }

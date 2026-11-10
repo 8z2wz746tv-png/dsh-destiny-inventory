@@ -74,7 +74,7 @@ export async function sendAction(
       // Bungie definitely did not move it: put the row back where the item still
       // is, rather than leaving the grid showing a destination that was refused.
       if (settled?.kind === 'failed') {
-        patchRows((rows) => confirmMove(rows, request.instanceId, request.from, false))
+        patchRows((rows) => confirmMove(rows, request.instanceId, request.from, false, 'rollback'))
       }
       return null
     }

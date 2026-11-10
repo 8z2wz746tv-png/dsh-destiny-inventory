@@ -133,7 +133,7 @@ export function useItemActions(options: ItemActionOptions): ItemActions {
           // `verifying` — an aborted request may well have executed upstream.
           const abandoned = pending.settle(eventId, 'rejected')
           if (abandoned?.kind === 'failed' && request.kind === 'move') {
-            patchRows((rows) => confirmMove(rows, request.instanceId, request.from, false))
+            patchRows((rows) => confirmMove(rows, request.instanceId, request.from, false, 'rollback'))
           }
           return null
         })
