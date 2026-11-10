@@ -77,35 +77,47 @@ locked masterwork name power quantity rarity rollSummary stats weaponType
 **结论**：能量条不是"画一个条"的事，是先把四个字段从 Bungie 读进来。
 按计划的约束「不允许前端猜测」，这一条没有捷径。
 
-## 三、套装：数据源比预想的更空
+## 三、套装：数据齐全，我上一版查错了表
 
-这是计划里点名的高风险项，查下来**确实是**。
+**修正**：上一版这里写着「manifest 里没有套装标识」，那是错的。我只查了
+`DestinyInventoryItemDefinition`，而套装在一个**独立表**里。
 
-在 zh manifest（2025-09-13，38894 条定义）里按字段名逐个查：
+### 真正的数据源
 
-| 字段 | 命中 |
-|---|---|
-| `setItems` | **0** |
-| `equipableItemSet` | **0** |
-| `equipableItemSetHash` | 840 条命中，但**抽样 400 条全是 null 或 0** |
-| `setBonus` / `setPerks` / `armorSet` | **0** |
+这份 sqlite 有 **83 张表**，其中包括 `DestinyEquipableItemSetDefinition`：
 
-也就是说：**这套 manifest 里没有任何一条护甲带着可用的套装标识。**
+- **56 个套装**
+- 每个带 `displayProperties.name`（中文名）、`setItems`（成员）、`setPerks`（分档效果）
+- `setPerks` 每档是 `{ requiredSetCount, sandboxPerkHash }`
+- `sandboxPerkHash` 指向 `DestinySandboxPerkDefinition`（也在库里，有名字与描述）
 
-### 这意味着什么
+实测「兴旺幸存者」：
 
-1. **不能靠名称相似判断**——计划里已经写了不行，现在更没得商量。
-2. **不能靠这个 manifest 做套装识别**。要么 manifest 版本不含这批数据（Destiny 的
-   套装加成是较新机制），要么字段在别的地方（`DestinyEquipableItemSetDefinition` 这类）。
-3. **在确认之前，护甲详情的「套装」区域不能做。** 按计划的原话：先确认数据源，
-   不能先画 UI 再找数据。
+```
+成员 15 件（护臂 / 胸甲 / 腿铠 / 风帽 …）
+2 件 → 开场表演：使用手雷造成最后一击会为热量武器提供稳定性和排气速度加成…
+4 件 → 房间清空：使用热量武器或主弹药武器造成多次最后一击…
+```
 
-### 建议的下一步（二选一，需要拍板）
+### 两件必须知道的事
 
-- **甲**：先花半天查 `DestinyEquipableItemSetDefinition` 是否存在、是否含成员与效果描述。
-  有的话，套装区域可以按数据做。
-- **乙**：这一版不做套装，护甲详情只做能量条 + 模组。
-  **明确标成"暂不支持"，而不是让模型推断数值。**
+1. **关系是反的**。`DestinyInventoryItemDefinition` 里的 `equipableItemSetHash` 全是 null，
+   所以**不能从物品查套装**——要从套装表的 `setItems` **反向建索引**。
+   840 条 (套装, 成员) 关系，正好覆盖 56 个套装。
+2. **`setItems` 存的是无符号 hash**，表里的 `id` 是有符号的。反查必须先转换：
+
+   ```
+   signed = h - 2**32 if h >= 2**31 else h
+   ```
+
+   `2419726011` → `-1875241285` → 兴旺幸存者护臂。不做这个转换，反查会全部落空。
+
+### 所以套装能不能做
+
+**能。** 不再是阻塞项。剩下的只是实现：建反向索引、读 `setPerks`、取
+`sandboxPerkDefinition` 的描述。
+
+「圣贤保护者臂环」不在任何套装里——那是普通掉落护甲，正常，不是数据缺失。
 
 ## 四、对计划的影响
 
@@ -116,10 +128,15 @@ locked masterwork name power quantity rarity rollSummary stats weaponType
 | 搜索：可切换 Perk | **要先把 `isPerkCategory` 的门放宽，或索引直接用 `socket.options`** |
 | 护甲：能量条 | **要先扩 DTO 四个字段** |
 | 护甲：模组信息 | 部分齐（插槽在，能量消耗没解析） |
-| 护甲：套装 | **数据源未确认，阻塞** |
+| 护甲：套装 | **数据齐全**（`DestinyEquipableItemSetDefinition`），要反向索引 |
 
-**两条线都不是"前端展示"工作量，都要先动数据层。** 这和计划里"优先复用现有 /details，
-不新增不必要的后端接口"的前提冲突——现状不是接口多余，是字段缺失。
+**两条线都要先动数据层，但性质和程度不同**：
+
+- 搜索：数据已经在内存里（`socket.options`），只是没往外给——改的是**出口**。
+- 护甲能量：Bungie 侧字段要新读，**真缺**。
+- 套装：数据齐全，只是没人读这张表——改的是**读取**，不是数据本身。
+
+所以计划里"优先复用现有 /details"这个前提，对套装成立，对能量条不成立。
 
 ## 五、这轮没做的
 
