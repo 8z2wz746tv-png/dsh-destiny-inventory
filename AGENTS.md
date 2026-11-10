@@ -300,6 +300,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 
 ### 调研与提案（`docs/research/`）：看了什么、差在哪、向别人要什么
 
+- `docs/research/P0-ENERGY-AUDIT.md` — **动护甲详情之前看它**：能量在组件 300、已被请求但解析时丢弃；套装齐全但要反向索引 + 有符号转换；查 hash 不能用名字模糊。
 - `docs/research/P0-DATA-AUDIT.md` — **动搜索或护甲详情之前看它**：可切换 Perk 被白名单挡住、护甲缺能量/元素/套装字段、manifest 里没有套装标识。审查结论，未改代码。
 - `docs/research/DIM-GAP-ANALYSIS.md` — 决定下一步做什么之前看它：DIM 有什么我们没有（2026-11-06 普查）。
 - `docs/research/CONTEXT-PLAN-DIFF.md` — 要理解上下文面为什么长这样时看它：原计划与实际取舍的对账。
