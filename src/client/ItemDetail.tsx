@@ -10,6 +10,7 @@ import type { ReactElement } from 'react'
 import type { ItemDetailView } from '../host/types'
 import { AMMO_CODE, AMMO_ICON } from './ammo-icons'
 import { IntrinsicBlock } from './IntrinsicBlock'
+import { ArmorEnergy, ArmorSetPanel } from './ArmorBlocks'
 import { PerkColumns } from './PerkColumns'
 import type { HoverSummary } from './use-hover-card'
 import { RecoilGauge } from './RecoilGauge'
@@ -233,6 +234,8 @@ export function ItemDetailCard({
             )}
 
               <IntrinsicBlock intrinsic={state.detail.intrinsic} />
+              <ArmorEnergy energy={state.detail.energy} />
+              <ArmorSetPanel set={state.detail.set} />
 
             {state.detail.stats.length > 0 && (
               <section

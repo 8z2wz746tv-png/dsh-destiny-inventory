@@ -239,6 +239,8 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/use-receipts.ts` | 回执栈：5 秒自动消失、可取消、排队中改文案。 |
 | `src/client/Receipts.tsx` | 回执渲染。 |
 | `src/client/use-hover-card.ts` | 详情卡状态（点开、点外关、Esc）。 |
+| `src/client/armor-view.ts` | 护甲两块的**判定**（纯函数）：能量条画不画、比例多少、套装区显示什么。组件只负责画。 |
+| `src/client/ArmorBlocks.tsx` | 能量条与套装区两个组件。样式内联（`styles-detail.ts` 贴着 430 上限）。 |
 | `src/client/ItemDetail.tsx` | 悬停详情卡本体。 |
 | `src/client/ItemTile.tsx` | 一个物品格（角标、光等、待确认环）。 |
 | `src/client/PerkColumns.tsx` | perk 列：一列一个插槽，池子竖着摞。 |
