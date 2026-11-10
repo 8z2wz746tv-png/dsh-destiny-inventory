@@ -96,3 +96,55 @@ describe('降级', () => {
     expect(sets.conflictCount).toBe(0)
   })
 })
+
+describe('接到详情 DTO 上', () => {
+  it('carries the set through with its tiers intact', async () => {
+    const { buildItemDetail } = await import('../src/host/item-detail')
+    const set = {
+      hash: -500,
+      name: '圣贤保护者',
+      tiers: [
+        { count: 2, name: '战斗冥想', description: '两件效果' },
+        { count: 4, name: '利刃专注', description: '四件效果' },
+      ],
+    }
+    const detail = buildItemDetail(
+      { key: 'i1', instanceId: 'i1', itemHash: 7, bucketHash: 1, quantity: 1, location: 'vault',
+        characterId: null, source: 'profile', slotHash: null, equipped: false, upstreamEquipped: false,
+        locked: false, transferStatus: 0, crafted: false, masterwork: false, enhanced: false,
+        gearTier: null, itemLevel: null, energy: null, stats: {}, plugObjectives: {},
+        power: null, sockets: [] } as never,
+      {
+        item: () => null,
+        bucket: () => null,
+        plug: () => null,
+        armorSet: () => set,
+        energyType: () => '',
+        damageType: () => '',
+        damageTypeIcon: () => '',
+        statOrder: () => [],
+        statName: () => '',
+      } as never,
+    )
+    // Injectable violation: drop `set` from the DTO and the card silently loses the
+    // whole section, which looks identical to "this armor has no set".
+    expect(detail.set).toEqual(set)
+  })
+
+  it('an item in no set reports null', async () => {
+    const { buildItemDetail } = await import('../src/host/item-detail')
+    const detail = buildItemDetail(
+      { key: 'i1', instanceId: 'i1', itemHash: 7, bucketHash: 1, quantity: 1, location: 'vault',
+        characterId: null, source: 'profile', slotHash: null, equipped: false, upstreamEquipped: false,
+        locked: false, transferStatus: 0, crafted: false, masterwork: false, enhanced: false,
+        gearTier: null, itemLevel: null, energy: null, stats: {}, plugObjectives: {},
+        power: null, sockets: [] } as never,
+      {
+        item: () => null, bucket: () => null, plug: () => null, armorSet: () => null,
+        energyType: () => '', damageType: () => '', damageTypeIcon: () => '',
+        statOrder: () => [], statName: () => '',
+      } as never,
+    )
+    expect(detail.set).toBeNull()
+  })
+})

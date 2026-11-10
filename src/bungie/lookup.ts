@@ -5,6 +5,7 @@
  * declared here rather than in `host/` so the dependency arrow keeps pointing
  * downward: `host → bungie`, never the reverse.
  */
+import type { ArmorSet } from './item-sets'
 import type { BucketDefinition, ManifestStore } from './manifest'
 
 /** Definition lookups the host layer is allowed to use. */
@@ -50,6 +51,8 @@ export interface DefinitionLookup {
   } | null
   /** Localized damage-type name for a `defaultDamageType` enum value. */
   damageType: (enumValue: number | null) => string
+  /** 护甲套装（含分档效果）；不属任何套装返回 `null`。 */
+  armorSet: (itemHash: number) => ArmorSet | null
   /** 能量元素名（虚空/烈日/电弧…）；查不到返回空串，调用方只显示数字。 */
   energyType: (hash: number | null) => string
   /** Absolute icon URL for that damage type. */
@@ -70,6 +73,7 @@ export function buildLookup(store: ManifestStore): DefinitionLookup {
     item: (hash) => store.item(hash),
     bucket: (hash) => store.bucket(hash),
     plug: (hash) => store.plug(hash),
+    armorSet: (itemHash) => store.armorSet(itemHash),
     energyType: (hash) => store.energyType(hash),
     damageType: (value) => store.damageType(value),
     damageTypeIcon: (value) => store.damageTypeIcon(value),

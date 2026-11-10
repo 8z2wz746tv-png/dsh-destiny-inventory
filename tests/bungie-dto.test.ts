@@ -11,6 +11,7 @@ import type { DefinitionLookup, ItemSource } from '../src/host/dto'
 
 /** A weapon definition with a kinetic bucket. */
 const definitions: DefinitionLookup = {
+  armorSet: () => null,
   energyType: () => '',
   item: () => ({
     name: '测试枪',
@@ -146,6 +147,7 @@ describe('classification', () => {
 
   it('reports a missing definition as null, never a placeholder', () => {
     const empty: DefinitionLookup = {
+    armorSet: () => null,
     energyType: () => '',
     item: () => null,
     bucket: () => null,

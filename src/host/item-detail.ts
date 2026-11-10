@@ -185,6 +185,7 @@ export function buildItemDetail(
     locked: item.locked,
     quantity: item.quantity,
     location: item.location,
+    set: definitions.armorSet(item.itemHash),
     energy:
       item.energy === null
         ? null

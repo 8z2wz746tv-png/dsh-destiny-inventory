@@ -197,6 +197,20 @@ export interface PerkColumnView {
 }
 
 /** Everything the detail card paints for one item. */
+/** 一档套装效果。 */
+export interface ArmorSetTierView {
+  count: number
+  name: string
+  description: string
+}
+
+/** 一个护甲套装。 */
+export interface ArmorSetView {
+  hash: number
+  name: string
+  tiers: ArmorSetTierView[]
+}
+
 export interface ItemDetailView {
   id: string
   instanceId: string
@@ -231,6 +245,11 @@ export interface ItemDetailView {
    * `type` 是本地化元素名；空串表示 manifest 里查不到，界面只显示数字，不猜元素。
    */
   energy: { capacity: number; used: number; unused: number; type: string } | null
+  /**
+   * 护甲套装。不属任何套装、或 manifest 里查不到时为 `null`。
+   * `tiers` 按所需件数升序；效果名与描述来自 `sandboxPerkHash`，不按套装名推断。
+   */
+  set: ArmorSetView | null
   /** Gear tier (T1..T5), null when the instance reports none. */
   gearTier: number | null
   /** Weapon/armor level. */
