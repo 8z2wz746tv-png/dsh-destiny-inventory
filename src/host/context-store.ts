@@ -18,18 +18,18 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 /** Where the user is looking. */
+export interface SelectedItemState {
+  instanceId: string; hash: number; name: string; observed: string; observedAt: number
+  pending?: { target: string; submittedAt: number; status: string }; rollback?: { location: string }
+}
+
 export interface ViewContext {
-  /**
-   * Which character the user is looking at: `hunter` / `warlock` / `titan`, or
-   * `all` when the panel is wide enough to show every store at once. Reporting a
-   * fixed class key there told the agent "you are looking at the hunter" while the
-   * user was reading all four columns side by side.
-   */
+  /** 焦点职业，面板宽到同时显示四列时是 `all`——那时报单个职业是在说谎。 */
   character: string
   filters: { search: string; category: string; lock: string; sort: string }
-  /** The item under the pointer's last click, or null. */
-  selected: { instanceId: string; hash: number; name: string; location: string } | null
-  /** Where the last drag was aimed, including while it is still in flight. */
+  /** 位置按来源分栏：三者可同时存在，谁都不能替代谁（见 PLAN-STATE-AUTHORITY.md §四）。 */
+  selected: SelectedItemState | null
+  /** 最后一次拖拽瞄准的位置，包括还在途中时。 */
   lastDropTarget: string | null
 }
 

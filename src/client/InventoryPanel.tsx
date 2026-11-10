@@ -206,12 +206,14 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   const visibleCount = sections.reduce((sum, section) => sum + section.itemCount, 0)
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 
-
-  // The agent answers "this one" from here.
+  // 「这件」从这里答，但给的是三个来源，不是一个位置。
   const picked = hoverCard.target === null ? undefined : itemById.get(hoverCard.target.id)
-  // Wide means every store is on screen: saying `hunter` there would be a lie.
-  useViewReport(routePath, viewOf(layout === 'wide' ? 'all' : activeCharacter, filters, picked, dropTarget))
-
+  const observedRow = state.kind === 'ready' && picked ? state.observed.find((i) => i.instanceId === picked.instanceId) : undefined
+  const selection = picked && {
+    picked, observed: observedRow, operation: pending.get(picked.instanceId),
+    observedAt: state.kind === 'ready' ? state.snapshot.fetchedAt : 0,
+  }
+  useViewReport(routePath, viewOf(layout === 'wide' ? 'all' : activeCharacter, filters, selection, dropTarget))
   const characterByLocation = useMemo(() => {
     const map = new Map<string, CharacterRow>()
     for (const character of profile?.characters ?? []) {

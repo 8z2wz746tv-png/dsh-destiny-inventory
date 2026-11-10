@@ -13,7 +13,15 @@ export interface ReportedView {
   /** `all` when the panel shows every store, otherwise the class key in focus. */
   character: string
   filters: { search: string; category: string; lock: string; sort: string }
-  selected: { instanceId: string; hash: number; name: string; location: string } | null
+  selected: {
+    instanceId: string
+    hash: number
+    name: string
+    observed: string
+    observedAt: number
+    pending?: { target: string; submittedAt: number; status: string }
+    rollback?: { location: string }
+  } | null
   lastDropTarget: string | null
 }
 
