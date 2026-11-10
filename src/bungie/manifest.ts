@@ -14,6 +14,7 @@
 import { existsSync } from 'node:fs'
 import { hasCraftingSocket, parseDamageTypes, parseOverlays, readCategoryHashes, readStatValues } from './manifest-shapes'
 import { DatabaseSync } from 'node:sqlite'
+import { EnergyTypeNames } from './energy-types'
 
 /** Why the definition database cannot answer right now. */
 export type ManifestFailure = 'missing' | 'unreadable' | 'empty' | 'query-failed'
@@ -212,6 +213,8 @@ export class ManifestStore {
   private counts: { itemCount: number; bucketCount: number } | undefined
   /** Localized damage-type names, keyed by `defaultDamageType` enum value. */
   private readonly damageTypes = new Map<number, { name: string; icon: string }>()
+  /** 能量元素名（懒加载）。 */
+  private readonly energyTypes = new EnergyTypeNames(this.db)
 
   constructor(dbPath: string) {
     this.dbPath = dbPath
@@ -266,7 +269,8 @@ export class ManifestStore {
     return this.damageTypeInfo(enumValue).icon
   }
 
-  /** Both damage-type facts, read together so the table is walked once. */
+  energyType(hash: number | null): string { return this.energyTypes.name(hash) }
+
   private damageTypeInfo(enumValue: number | null): { name: string; icon: string } {
     const empty = { name: '', icon: '' }
     if (enumValue === null || this.db === null) return empty
@@ -284,10 +288,7 @@ export class ManifestStore {
     return this.damageTypes.get(enumValue) ?? empty
   }
 
-  /**
-   * The game's own icon overlays, from `DestinyInventoryItemConstantsDefinition`.
-   *
-   * DIM paints the crafted chip and the tier marker with these exact images
+  /** 图标角标，来自 `DestinyInventoryItemConstantsDefinition`：DIM 用它们画锻造与品阶标记。
    * rather than drawing its own shapes.
    * @returns absolute URLs plus the crafting constants, empty when unavailable.
    */

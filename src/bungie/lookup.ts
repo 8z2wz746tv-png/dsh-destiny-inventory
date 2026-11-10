@@ -50,6 +50,8 @@ export interface DefinitionLookup {
   } | null
   /** Localized damage-type name for a `defaultDamageType` enum value. */
   damageType: (enumValue: number | null) => string
+  /** 能量元素名（虚空/烈日/电弧…）；查不到返回空串，调用方只显示数字。 */
+  energyType: (hash: number | null) => string
   /** Absolute icon URL for that damage type. */
   damageTypeIcon: (enumValue: number | null) => string
   /** Ordered stat hashes for one `statGroupHash`. */
@@ -68,6 +70,7 @@ export function buildLookup(store: ManifestStore): DefinitionLookup {
     item: (hash) => store.item(hash),
     bucket: (hash) => store.bucket(hash),
     plug: (hash) => store.plug(hash),
+    energyType: (hash) => store.energyType(hash),
     damageType: (value) => store.damageType(value),
     damageTypeIcon: (value) => store.damageTypeIcon(value),
     statOrder: (hash) => store.statOrder(hash),

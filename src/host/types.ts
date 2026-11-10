@@ -226,6 +226,11 @@ export interface ItemDetailView {
    * recoil direction) — same rule DIM applies.
    */
   stats: { hash: number; name: string; value: number; display: 'bar' | 'number' | 'recoil' }[]
+  /**
+   * 护甲能量。武器与缺失时 `null`——**不是 0**。
+   * `type` 是本地化元素名；空串表示 manifest 里查不到，界面只显示数字，不猜元素。
+   */
+  energy: { capacity: number; used: number; unused: number; type: string } | null
   /** Gear tier (T1..T5), null when the instance reports none. */
   gearTier: number | null
   /** Weapon/armor level. */

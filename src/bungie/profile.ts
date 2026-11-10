@@ -49,6 +49,8 @@ export interface ProfileItem {
   characterId: string | null
   /** Which profile component delivered this row. Position comes from here, never from a hash. */
   source: 'profile' | 'character-inventory' | 'equipment' | 'postmaster'
+  /** 护甲能量（组件 300）。武器与缺失时 `null`——**不是 0**，0 是合法容量。 */
+  energy: { capacity: number; used: number; unused: number; typeHash: number } | null
   /** Component 205's own `bucketHash`: the slot this instance occupies. Only set for `equipment`. */
   slotHash: number | null
   /** True only for items delivered by component 205. */
@@ -146,6 +148,13 @@ export interface RawInstance {
   itemLevel?: number
   isEquipped?: boolean
   primaryStat?: { value?: number }
+  /** 组件 300 的能量三态。只有护甲有；武器与缺失时整块不存在。 */
+  energy?: {
+    energyCapacity?: number
+    energyUsed?: number
+    energyUnused?: number
+    energyTypeHash?: number
+  }
 }
 
 /** The subset of the GetProfile `Response` we read. */

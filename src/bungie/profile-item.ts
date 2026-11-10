@@ -20,6 +20,25 @@ export interface ProfileParts {
   statData: Record<string, RawStats | undefined>
 }
 
+/**
+ * 组件 300 的能量块 → 三个数字。
+ * @param energy - 原始块；武器与旧数据里不存在。
+ * @returns 缺失时 `null`，**绝不补 0**——0 是一个合法的已用能量值。
+ */
+function readEnergy(
+  energy:
+    | { energyCapacity?: number; energyUsed?: number; energyUnused?: number; energyTypeHash?: number }
+    | undefined,
+): { capacity: number; used: number; unused: number; typeHash: number } | null {
+  if (energy === undefined || typeof energy.energyCapacity !== 'number') return null
+  return {
+    capacity: energy.energyCapacity,
+    used: typeof energy.energyUsed === 'number' ? energy.energyUsed : 0,
+    unused: typeof energy.energyUnused === 'number' ? energy.energyUnused : 0,
+    typeHash: typeof energy.energyTypeHash === 'number' ? energy.energyTypeHash : 0,
+  }
+}
+
 export function toItem(
   raw: RawItem,
   source: ProfileItem['source'],
@@ -55,6 +74,7 @@ export function toItem(
     stats: readStats(statData[instanceId]),
     plugObjectives: readObjectives(objectiveData[instanceId]),
     power: typeof instance?.primaryStat?.value === 'number' ? instance.primaryStat.value : null,
+    energy: readEnergy(instance?.energy),
     sockets: readSockets(socketRow, reusableRow),
   }
 }

@@ -37,12 +37,8 @@ function isPerkCategory(identifier: string): boolean {
 }
 
 /**
- * Socket category → the label the game shows.
- *
- * Bungie publishes these as `plugCategoryIdentifier` keys (`barrels`,
- * `magazines`, …) with no localized name in the manifest we hold, so the common
- * ones are mapped here; anything unmapped falls back to its key rather than
- * inventing a label.
+ * 插槽类别 → 游戏显示的标签。manifest 里只有 `plugCategoryIdentifier` 键，没有本地化名，
+ * 所以常见的那几个映射在这里；没映射的退回键名，不编标签。
  */
 const SOCKET_LABEL: Record<string, string> = {
   barrels: '枪管',
@@ -96,8 +92,7 @@ function columnsOf(item: ProfileItem, plug: DefinitionLookup['plug']): PerkColum
 
     // Every plug the socket accepts, installed one first: that is the pool DIM
     // draws as a column, not a single cell.
-    // Mod sockets show the installed plug only; their pool is a picker, not a
-    // comparison. Perk sockets show everything the socket accepts.
+    // 模组槽只画已装的那个（池子是选择器，不是对比）；Perk 槽画出全部可选项。
     const perkSocket = isPerkCategory(definition.plugCategoryIdentifier)
     const hashes = perkSocket
       ? [socket.plugHash, ...socket.options.filter((hash) => hash !== socket.plugHash)]
@@ -190,6 +185,10 @@ export function buildItemDetail(
     locked: item.locked,
     quantity: item.quantity,
     location: item.location,
+    energy:
+      item.energy === null
+        ? null
+        : { ...item.energy, type: definitions.energyType(item.energy.typeHash) },
     rarity: toRarity(definition?.tierType ?? null),
     damageType: definitions.damageType(definition?.damageType ?? null),
     damageIcon: definitions.damageTypeIcon(definition?.damageType ?? null),
