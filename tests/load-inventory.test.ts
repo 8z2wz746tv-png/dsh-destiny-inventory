@@ -58,7 +58,7 @@ const profile: PlayerProfileView = {
 
 function harness() {
   const pending = new PendingOps()
-  const painted: { items: InventorySnapshot['items']; characters: unknown[] }[] = []
+  const painted: { items: InventorySnapshot['items']; observed: InventorySnapshot['items']; characters: unknown[] }[] = []
   const errors: string[] = []
   return {
     pending,
@@ -67,8 +67,8 @@ function harness() {
     deps: {
       routePath: '/b',
       pending,
-      onSnapshot: (snap: InventorySnapshot, p: PlayerProfileView) => {
-        painted.push({ items: snap.items, characters: p.characters })
+      onSnapshot: (snap: InventorySnapshot, observed: InventorySnapshot['items'], p: PlayerProfileView) => {
+        painted.push({ items: snap.items, observed, characters: p.characters })
       },
       onError: (message: string) => {
         errors.push(message)

@@ -25,7 +25,8 @@ import type { InventoryFilters, LayoutMode, StoreCell } from './filter'
 
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'ready'; snapshot: InventorySnapshot; profile: PlayerProfileView }
+  /* `observed` 是未叠 overlay 的原始行；`patchRows` 不碰它 */
+  | { kind: 'ready'; snapshot: InventorySnapshot; observed: ItemRow[]; profile: PlayerProfileView }
 
 
 
@@ -133,7 +134,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         {
           routePath,
           pending,
-          onSnapshot: (snapshot, profile) => { setError(null); setState({ kind: 'ready', snapshot, profile }) },
+          onSnapshot: (snapshot, observed, profile) => { setState({ kind: 'ready', snapshot, observed, profile }); setError(null) },
           onError: setError,
         },
         signal,
@@ -164,7 +165,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     return () => observer.disconnect()
   }, [])
 
-  /** Rewrite the rows in place, leaving the rest of the snapshot alone. */
+  /** 只改渲染行；`observed` 不经过这里。 */
   const patchRows = useCallback((change: (rows: ItemRow[]) => ItemRow[]) => {
     setState((current) =>
       current.kind === 'ready'
@@ -190,10 +191,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     [items, filters, layout, activeCharacter],
   )
   /**
-   * Page order with the always-present shelves filled in.
-   *
-   * The mailbox and the engram shelf appear whether or not they hold anything,
-   * exactly like the game; every other category only shows up with items.
+   * 页面顺序 + 常驻货架：邮局与水晶空着也占位，其余有货才出现。
    */
   const displaySections = useMemo(() => {
     const shelves = new Map(emptyShelfSections().map((section) => [section.id, section]))
