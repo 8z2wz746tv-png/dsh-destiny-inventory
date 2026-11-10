@@ -15,6 +15,8 @@ import { existsSync } from 'node:fs'
 import { hasCraftingSocket, parseDamageTypes, parseOverlays, readCategoryHashes, readStatValues } from './manifest-shapes'
 import { DatabaseSync } from 'node:sqlite'
 import { EnergyTypeNames } from './energy-types'
+import { ItemSets } from './item-sets'
+import type { ArmorSet } from './item-sets'
 
 /** Why the definition database cannot answer right now. */
 export type ManifestFailure = 'missing' | 'unreadable' | 'empty' | 'query-failed'
@@ -215,6 +217,7 @@ export class ManifestStore {
   private readonly damageTypes = new Map<number, { name: string; icon: string }>()
   /** 能量元素名（懒加载）。 */
   private readonly energyTypes = new EnergyTypeNames(this.db)
+  private readonly sets = new ItemSets(this.db)
 
   constructor(dbPath: string) {
     this.dbPath = dbPath
@@ -270,6 +273,7 @@ export class ManifestStore {
   }
 
   energyType(hash: number | null): string { return this.energyTypes.name(hash) }
+  armorSet(itemHash: number): ArmorSet | null { return this.sets.of(itemHash) }
 
   private damageTypeInfo(enumValue: number | null): { name: string; icon: string } {
     const empty = { name: '', icon: '' }
@@ -288,10 +292,7 @@ export class ManifestStore {
     return this.damageTypes.get(enumValue) ?? empty
   }
 
-  /** 图标角标，来自 `DestinyInventoryItemConstantsDefinition`：DIM 用它们画锻造与品阶标记。
-   * rather than drawing its own shapes.
-   * @returns absolute URLs plus the crafting constants, empty when unavailable.
-   */
+  /** 图标角标（锻造/品阶），来自 `DestinyInventoryItemConstantsDefinition`。 */
   iconOverlays(): { crafted: string; craftedBackground: string; tiers: string[] } {
     const empty = { crafted: '', craftedBackground: '', tiers: [] as string[] }
     if (this.db === null) return empty

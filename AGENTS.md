@@ -179,6 +179,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/bungie/profile-item.ts` | 单行 → `ProfileItem` 的组装（`profile.ts` 的行数上限靠它保住）。 |
 | `src/bungie/sockets.ts` | 组件 305（当前 plug）与 310（可选池）的形状。 |
 | `src/bungie/energy-types.ts` | 能量元素名（虚空/烈日/电弧…）。按 **hash** 查且要过 `toSignedHash`，落空返回空串——详情卡只显示数字，不猜元素。 |
+| `src/bungie/item-sets.ts` | 护甲套装反向索引：`setItems`（无符号）→ 有符号 → `itemHash → 套装`，效果经 `sandboxPerkHash` 取描述。**一对一是实测前提**，`conflictCount` 露出冲突。 |
 | `src/bungie/manifest.ts` | 定义查询，读 MCP 那份 sqlite。**不下载、不刷新、不版本化**；贴着 400 上限。 |
 | `src/bungie/manifest-shapes.ts` | Manifest 行解码纯函数：属性值、锻造槽、角标、分类哈希、伤害表。 |
 | `src/bungie/lookup.ts` | 读定义的门面（`DefinitionLookup`），host 层只认它。 |
