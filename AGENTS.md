@@ -4,17 +4,18 @@
 
 > 通用骨架见 `docs/CODING-STANDARDS.md`。两者冲突时以本文件为准（这里含项目落点）。
 
-> **当前冻结点（2026-11-09）**：`feat/consistency-p1` @ `c4e47dc`，319 测试绿（1 skipped），
+> **当前冻结点（2026-11-10）**：`feat/consistency-p1` @ `f598c02`，326 测试绿（1 skipped），
 > `master` 未合并、未打包。
 >
 > **P1.5 跨刷新恢复已冻结**。设计、三个缺口与两条已验证边界全在
 > `docs/plans/PLAN-P15-RECOVERY.md` §七点六 / §七点七——**不要把缺口写成已解决**。
 >
-> **下一阶段主题：跨层状态解释一致性**。同一件物品的状态在客户端、Host、Agent 和 Bungie
-> 之间可能给出不同解释，最具体的一条是「回滚位置没有标记」：写入被拒后 `confirmMove`
-> 落下的位置既不是观测也不是 Pending，库存面板和详情卡会对同一件物品说不同的话。
-> 这不只影响界面——它也影响 Agent 的事实来源、后续操作的起点，以及 Context Builder
-> 喂给模型的东西。**下一阶段从这一条切入，而不是从修一个环切入。**
+> **进行中：跨层状态解释一致性**。协议在 `docs/plans/PLAN-STATE-AUTHORITY.md`，
+> §五 的渲染优先级已经落地（`confirmMove` 带 `source`，回滚位置戴 `unconfirmed`）。
+>
+> **还没做的两件，都是被明确划在范围外的**：详情卡仍然只报 `observed`、Agent view 仍然
+> 报 `effective`。也就是说"格子说 hunter、详情卡说 vault、agent 说 hunter"这个不一致
+> **依然存在**——协议 §四 规定它们该怎么改，但还没改。别把 §五 落地当成整件事做完了。
 
 ---
 
