@@ -79,6 +79,30 @@ export function useConversation(
     }
   }, [adapter, conversation, enabled])
 
+  // 面板的视图是它自己 POST 上去的，浮窗订阅不到，只能按期读。
+  // 2 秒够跟上"选中一件东西"，又不至于把桥接打成筛子。
+  useEffect(() => {
+    if (routePath === '') return
+    let stopped = false
+    const tick = () => {
+      if (stopped) return
+      const controller = new AbortController()
+      fetchContext(routePath, controller.signal)
+        .then((next) => {
+          if (!stopped) setView(next as ViewContextLike)
+        })
+        .catch(() => {
+          // 读不到就保持上一次的：按钮宁可旧一点，也别忽然全变回"没选中"。
+        })
+    }
+    tick()
+    const timer = setInterval(tick, 2000)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+  }, [routePath])
+
   const send = useCallback(
     async (text: string): Promise<boolean> => {
       const handle = session.current
