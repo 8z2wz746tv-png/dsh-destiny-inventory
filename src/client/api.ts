@@ -57,6 +57,8 @@ export function fetchAccount(routePath: string, signal: AbortSignal): Promise<Ac
   return readBridge<AccountIdentity>(`${routePath}/account`, signal)
 }
 
+export const fetchContext = (routePath: string, signal: AbortSignal) => readBridge<unknown>(`${routePath}/context`, signal)
+
 /** 搜索索引：可搜文本 + 去重后的描述表。 */
 export function fetchSearchIndex(routePath: string, signal: AbortSignal): Promise<SearchPayload> {
   return readBridge<SearchPayload>(`${routePath}/search-index`, signal)
@@ -153,10 +155,7 @@ export function readItemDetailCached(
   return pending
 }
 
-/**
- * 一次预热全部详情：1924 个单件请求抢不过指针，宿主一次批量建完。
- * @param signal - caller-owned cancellation.
- */
+/** 一次预热全部详情：1924 个单件请求抢不过指针，宿主一次批量建完。 */
 export function warmDetails(routePath: string, signal: AbortSignal): void {
   readBridge<Record<string, ItemDetailView>>(`${routePath}/details`, signal)
     .then((all) => {

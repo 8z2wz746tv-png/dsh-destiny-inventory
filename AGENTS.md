@@ -223,6 +223,8 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
 | `src/client/agent/session-adapter.ts` | Session 接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**不认识 React**，契约本地声明。 |
 | `src/client/agent/conversation.ts` | 对话状态机（A4）：`change.kind` 决定替换/前插/追加/定型。**不画 UI、不认 DSH 事件类型**。 |
+| `src/client/agent/context-prompt.ts` | `/context` 的视图 → prompt：焦点职业、选中物品、未核验/回滚位置。**只说事实，没有的字段不加**。 |
+| `src/client/agent/quick-actions.ts` | 按当前上下文生成快捷按钮。**没选中物品就不给"分析这件"**——那会发一句指向空的话。 |
 | `src/client/agent/tool-pairs.ts` | 工具调用与结果**按 `callId` 配对**，支持结果先到；`toolStatus` 给出 pending/done/failed。 |
 | `src/client/agent/message-view.ts` | 行 → 气泡：把 Controller 的输出摊成界面字段，**不读 DSH 事件流**。 |
 | `src/client/agent/send-result.ts` | 解释 `prompt` 的返回值：**失败不抛，靠 `ok:false`**。纯函数，让这条规则能被测住。 |

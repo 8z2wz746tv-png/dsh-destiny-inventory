@@ -60,8 +60,10 @@ export function apply(ctx: Context, config: ConfigShape): void {
       if (query === '/journal') return sendJson(res, 200, { ok: true, data: context.recent(200) } satisfies BridgeResponse<unknown>)
 
       if (query === '/context') {
+        // GET = 读回当前视图：浮窗发消息前要先知道玩家在看什么。
+        if (req.method === 'GET') return sendJson(res, 200, { ok: true, data: context.readView() } satisfies BridgeResponse<unknown>)
         if (req.method !== 'POST') {
-          sendJson(res, 405, { ok: false, error: { code: 'MethodNotAllowed', message: 'POST only' } })
+          sendJson(res, 405, { ok: false, error: { code: 'MethodNotAllowed', message: 'GET or POST only' } })
           return
         }
         try {

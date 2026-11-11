@@ -93,6 +93,19 @@ const DOCK_STYLES = `
   opacity: .7;
   white-space: pre-wrap;
 }
+.inventory-dock__quick { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
+.inventory-dock__chip {
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.inventory-dock__chip:hover { background: rgba(255, 255, 255, .1); }
+.inventory-dock__chip:disabled { opacity: .4; cursor: default; }
 .inventory-dock__composer { display: flex; gap: 6px; flex: none; }
 .inventory-dock__input {
   flex: 1 1 auto;

@@ -40,7 +40,13 @@ function initialState(): DockState {
   return refit(stored, view)
 }
 
-export function DockWindow({ sessions = null }: { sessions?: SessionDeps | null } = {}): ReactElement {
+export function DockWindow({
+  sessions = null,
+  routePath = '',
+}: {
+  sessions?: SessionDeps | null
+  routePath?: string
+} = {}): ReactElement {
   const [state, setState] = useState<DockState>(initialState)
   /** 拖动中的起点，用 ref 避免每次 move 都重渲染。 */
   const drag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
@@ -147,7 +153,7 @@ export function DockWindow({ sessions = null }: { sessions?: SessionDeps | null 
       </div>
       {!state.collapsed && (
         <div className="inventory-dock__body">
-          <DockChat sessions={sessions} />
+          <DockChat sessions={sessions} routePath={routePath} />
         </div>
       )}
     </div>

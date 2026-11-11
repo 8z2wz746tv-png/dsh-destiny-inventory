@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { bubblesOf } from './message-view'
+import { quickActions } from './quick-actions'
 import type { Bubble } from './message-view'
 import { useConversation } from './use-conversation'
 import type { SessionDeps } from './session-adapter'
@@ -31,9 +32,15 @@ function ToolBubble({ bubble }: { bubble: Bubble }): ReactElement {
   )
 }
 
-export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactElement {
+export function DockChat({
+  sessions,
+  routePath = '',
+}: {
+  sessions: SessionDeps | null
+  routePath?: string
+}): ReactElement {
   const [draft, setDraft] = useState('')
-  const { state, phase, error, send } = useConversation(sessions, true)
+  const { state, phase, error, send, view } = useConversation(sessions, true, routePath)
   const bubbles = bubblesOf(state)
   const logRef = useRef<HTMLDivElement>(null)
 
@@ -73,6 +80,20 @@ export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactE
         {state.error !== null && <div className="inventory-dock__bubble is-error">{state.error}</div>}
       </div>
       {error !== null && <div className="inventory-dock__bubble is-error">{error}</div>}
+      <div className="inventory-dock__quick">
+        {quickActions(view).map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className="inventory-dock__chip"
+            disabled={phase === 'sending'}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => void send(action.prompt)}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
       <div className="inventory-dock__composer">
         <input
           className="inventory-dock__input"

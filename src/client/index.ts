@@ -76,7 +76,7 @@ export function apply(ctx: Context): void {
           name: 'shell.overlay',
           id: 'destiny-dock',
           order: 1100,
-          inject: () => ({ sessions: (ctx as unknown as { sessions: SessionDeps }).sessions }),
+          inject: () => ({ sessions: (ctx as unknown as { sessions: SessionDeps }).sessions, routePath }),
         },
         DockWindow,
       ),
