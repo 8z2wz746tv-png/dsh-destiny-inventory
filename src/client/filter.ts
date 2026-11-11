@@ -1,5 +1,6 @@
 import { buildCells, makeCell } from './cells'
 import type { CellSegment } from './segments'
+import { matchesQuery } from './search-text'
 import type { ItemRow } from '../host/types'
 import { ALWAYS_SHOWN, BUCKET_SECTIONS, bucketRank, sectionOfBucket } from './buckets'
 
@@ -180,13 +181,23 @@ export function rowLabelOf(item: ItemRow): string {
  * @param item - the item row.
  * @param filters - current toolbar state.
  */
-export function matchesFilters(item: ItemRow, filters: InventoryFilters): boolean {
+export function matchesFilters(
+  item: ItemRow,
+  filters: InventoryFilters,
+  /** 索引提供的可搜文本；缺省时只按名称匹配。 */
+  haystack?: (id: string) => string,
+): boolean {
   if (filters.type !== '' && item.type !== filters.type) return false
   if (filters.category !== 'all' && item.kind !== filters.category) return false
   if (filters.lock === 'locked' && !item.locked) return false
   if (filters.lock === 'unlocked' && item.locked) return false
-  const needle = filters.search.trim().toLowerCase()
-  if (needle !== '' && !item.name.toLowerCase().includes(needle)) return false
+  const query = filters.search.trim()
+  if (query !== '') {
+    const text = haystack?.(item.id) ?? ''
+    // 索引里有就搜整段（名称 + 类型 + perk 名 + 描述），没有就退回只搜名称。
+    const target = text === '' ? item.name.toLowerCase() : text
+    if (!matchesQuery(target, query)) return false
+  }
   return true
 }
 

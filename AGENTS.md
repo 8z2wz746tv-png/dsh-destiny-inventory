@@ -251,6 +251,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/ammo-icons.ts` | 三种弹药图标（抄 DIM 的 SVG）。 |
 | `src/client/InventoryToolbar.tsx` | 筛选栏：搜索、分类、类型、锁定、排序、刷新、版本号（构建时注入）。 |
 | `src/client/InventoryPanelIcon.tsx` | 侧边栏行图标（游戏自己的 Vault 标记）。 |
+| `src/client/search-text.ts` | 索引 → 可搜文本（一次算好存 Map）+ 多关键词 AND。索引缺失时返回空串，调用方退回按名称搜。 |
 | `src/client/filter.ts` | 纯视图逻辑：筛选、分区、行、单元格。**分区顺序由 `buckets.ts` 派生**。 |
 | `src/client/buckets.ts` | **唯一的桶分类表**（`BUCKET_SECTIONS`/`ALWAYS_SHOWN`）。新增分类只改这里。 |
 | `src/client/cells.ts` | 单元格构造（仓库格带 `segments`）。 |
