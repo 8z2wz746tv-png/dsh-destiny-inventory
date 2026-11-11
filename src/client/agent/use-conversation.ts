@@ -11,6 +11,9 @@ import { sendOutcome } from './send-result'
 import type { AgentSession, SessionDeps } from './session-adapter'
 import type { ConversationState } from './conversation'
 
+/** 随航会话用的 preset 目录名。 */
+const AGENT_PRESET = 'destiny'
+
 /** 发送的三个阶段，界面据此禁用按钮与显示错误。 */
 export type SendPhase = 'idle' | 'sending'
 
@@ -34,7 +37,10 @@ export function useConversation(deps: SessionDeps | null, enabled: boolean): Con
   const [error, setError] = useState<string | null>(null)
   const session = useRef<AgentSession | null>(null)
   const adapter = useMemo(
-    () => (deps === null ? null : new SessionAdapter(deps)),
+    // `destiny` 是 ~/.dsh/.agent-presets/destiny 那个 preset：persona 就是
+    // "命运 2 的随航助手"，且**刻意不挂 bash / fs / subagent**。
+    // 不传的话会建一个默认会话，第一条 assistant 消息是注入的上下文而不是对话。
+    () => (deps === null ? null : new SessionAdapter(deps, { agentPreset: AGENT_PRESET })),
     [deps],
   )
 
