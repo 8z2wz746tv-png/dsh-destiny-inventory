@@ -15,7 +15,7 @@ import { pickPrimaryMembership, readMemberships } from '../bungie/memberships'
 import type { DestinyMembership } from '../bungie/memberships'
 import { readAllDetails } from './details-bulk'
 import { buildSearchIndex } from './search-index'
-import type { SearchEntry } from './search-index'
+import type { SearchPayload } from './search-index'
 import { resolveItemState } from './item-state-route'
 import { SnapshotCache } from './snapshot-cache'
 import { runItemWrite } from './item-write'
@@ -228,7 +228,7 @@ export class BungieService {
   }
 
   /** 搜索索引：直接吃 310 的可选池，不吃详情卡的白名单。 */
-  async searchIndex(): Promise<SearchEntry[]> {
+  async searchIndex(): Promise<SearchPayload> {
     const { snapshot, definitions } = await this.detailSource()
     return buildSearchIndex(snapshot.items, definitions)
   }
