@@ -220,6 +220,9 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 
 | 文件 | 做什么 |
 |---|---|
+| `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
+| `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
+| `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |
 | `src/client/index.ts` | 客户端入口：把面板注册进宿主槽位。 |
 | `src/client/InventoryPanel.tsx` | 面板主体：状态、拖拽、行渲染。**贴着 450 上限**，新逻辑往 hook 里放。 |
 | `src/client/use-item-actions.ts` | 动作编排：`move`/`equip`/`lock` 进队列、回执、失败回读。面板只调它。 |

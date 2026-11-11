@@ -3,6 +3,8 @@ import { InventoryPanelIcon } from './InventoryPanelIcon'
 import { InventoryPanel } from './InventoryPanel'
 import type { ClientSlotSeam } from './slots'
 import { ensureStyles } from './styles'
+import { DockWindow } from './agent/DockWindow'
+import { ensureDockStyles } from './agent/styles-dock'
 
 /**
  * Browser half of the plugin.
@@ -38,6 +40,7 @@ export function apply(ctx: Context): void {
   const routePath = DEFAULT_ROUTE_PATH
   const disposers: (() => void)[] = []
   disposers.push(ensureStyles())
+  disposers.push(ensureDockStyles())
   disposers.push(
     slots.inject('sidebar.panellist', () =>
       slots.register(
@@ -61,6 +64,12 @@ export function apply(ctx: Context): void {
         },
         InventoryPanel,
       ),
+    ),
+  )
+  disposers.push(
+    // 悬浮窗：order 1100 越过 dsh-plugin-session-panes 的 1000，避免被它压住。
+    slots.inject('shell.overlay', () =>
+      slots.register({ name: 'shell.overlay', id: 'destiny-dock', order: 1100 }, DockWindow),
     ),
   )
   ctx.effect(() => () => {
