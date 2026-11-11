@@ -13,7 +13,7 @@ const user = (seq: number) => ({ type: 'event', event: { type: 'user/message', s
 // 真实形状（探针实证）：chunk 是 type 驱动的；文本块用 text-delta。
 const chunk = (attemptId: string, text: string) => ({
   type: 'transient',
-  data: { attemptId, chunk: { type: 'text-delta', textDelta: text } },
+  data: { attemptId, chunk: { type: 'text-delta', index: 1, text } },
 })
 const replace = (entries: unknown[], hasMore = false) =>
   ({ entries, hasMore, revision: 1, change: { kind: 'replace', entries } }) as never
@@ -152,9 +152,14 @@ describe('分页', () => {
 })
 
 describe('chunk 文本提取', () => {
-  it('only reads text blocks, by type', () => {
-    expect(chunkText({ type: 'text-delta', textDelta: 'a' })).toBe('a')
-    expect(chunkText({ type: 'text-delta', text: 'b' })).toBe('b')
+  it('reads the shape the source confirms', () => {
+    // dsh-llm 等五处一致：{ type: 'text-delta', index, text }。
+    expect(chunkText({ type: 'text-delta', index: 1, text: '你好' })).toBe('你好')
+  })
+
+  it('does not take reasoning deltas for content', () => {
+    // 同族但不同 type：那是模型的思考，不进气泡。
+    expect(chunkText({ type: 'reasoning-delta', index: 0, text: '思考' })).toBe('')
   })
 
   it('ignores the tool chunks the probe actually captured', () => {

@@ -91,11 +91,15 @@ function kindOf(event: { type?: string } | undefined): string {
  * 原来"挨个字段找像文本的"是错的：`tool-call-delta` 的 `argumentsDelta` 会被
  * 误当成正文。
  *
- * 文本增量的确切字段名**仍未验到**（这轮抓到的三条都是工具相关），所以只认
- * `text-delta` 这一种 type，字段名留几个候选；认不出就返回空，不影响其它块。
+ * 文本增量的形状有**源码佐证**（2026-11-12，`dsh-llm` / `dsh-api-session-controller` /
+ * `dsh-session-format-v0-to-v1` 五处一致）：
  *
- * 注意：按 type 分派**在当前数据下和按字段名硬找结果相同**——`tool-call-delta`
- * 用的是 `argumentsDelta`，不会撞上候选字段名。这是防御性收紧，不是修 bug。
+ *     { type: 'text-delta', index: <number>, text: <string> }
+ *
+ * 所以取 `text` 就够。`reasoning-delta` 是同族但不同 type，不会进来——
+ * 那是模型的思考，不是给玩家看的正文。
+ *
+ * 仍然保留"认不出就返回空"：一个没见过的块只该少一段增量，不该打断整条流。
  *
  * @param chunk - 一个 `StreamChunk`。
  * @returns 该 chunk 携带的正文；不是文本块就是空串。
@@ -104,11 +108,7 @@ export function chunkText(chunk: unknown): string {
   if (typeof chunk !== 'object' || chunk === null) return ''
   const c = chunk as Record<string, unknown>
   if (c.type !== 'text-delta') return ''
-  for (const key of ['textDelta', 'text', 'delta']) {
-    const value = c[key]
-    if (typeof value === 'string') return value
-  }
-  return ''
+  return typeof c.text === 'string' ? c.text : ''
 }
 
 /**
