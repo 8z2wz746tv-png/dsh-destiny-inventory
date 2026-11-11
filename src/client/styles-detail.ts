@@ -85,7 +85,6 @@ export const DETAIL_LAYOUT_CSS = `
 .inventory-detail-roll { color: var(--accent); }
 `
 
-/** The ported card rules. */
 
 /**
  * Hover card — the webui's floating preview, ported as-is.
@@ -426,4 +425,6 @@ export const DETAIL_ACTIONS_CSS = `
   cursor: pointer;
 }
 .inventory-hover-actions button:hover { background: rgba(255, 255, 255, .14); }
+.inventory-hover-perk.is-match { outline: 1px solid rgba(240,217,138,.45); outline-offset: 1px; border-radius: 3px; }
+.inventory-hover-perk.is-match strong { color: #f0d98a; }
 `

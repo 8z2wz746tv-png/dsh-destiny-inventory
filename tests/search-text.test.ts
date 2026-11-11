@@ -83,3 +83,13 @@ describe('宿主比前端旧的时候', () => {
     expect(haystackOf(old)('w1')).toBe('')
   })
 })
+
+describe('高亮：命中的 perk 要能看出来', () => {
+  it('a perk is marked only when it actually matches the query', () => {
+    // 这条钉住的是判定口径，不是渲染：命中靠 `matchesQuery`，与筛选完全同一条规则。
+    // Injectable violation: 用 includes 直接比，多关键词 AND 就退化成子串匹配。
+    expect(matchesQuery('光速拔枪', '光速拔枪')).toBe(true)
+    expect(matchesQuery('光速拔枪', '光速')).toBe(true)
+    expect(matchesQuery('快速命中', '光速拔枪')).toBe(false)
+  })
+})

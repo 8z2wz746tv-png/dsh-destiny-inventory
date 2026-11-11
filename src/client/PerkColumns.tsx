@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { matchesQuery } from './search-text'
 import type { PerkColumnView } from '../host/types'
 
 /**
@@ -8,7 +9,14 @@ import type { PerkColumnView } from '../host/types'
  * webui renders — a single flat row of perks read as "missing options".
  * @param props - the columns to draw.
  */
-export function PerkColumns({ columns }: { columns: PerkColumnView[] }): ReactElement {
+export function PerkColumns({
+  columns,
+  highlight = '',
+}: {
+  columns: PerkColumnView[]
+  /** 当前搜索词；命中的 perk 会被标出来，让"为什么这 25 件"有答案。 */
+  highlight?: string
+}): ReactElement {
   return (
     <div className="inventory-hover-socket-columns">
       {columns.map((column) => (
@@ -16,7 +24,9 @@ export function PerkColumns({ columns }: { columns: PerkColumnView[] }): ReactEl
           <p className="inventory-hover-socket-column__label">{column.slot}</p>
           {column.options.map((option) => (
             <div
-              className={`inventory-hover-perk${option.selected ? ' is-selected' : ''}`}
+              className={`inventory-hover-perk${option.selected ? ' is-selected' : ''}${
+                matchesQuery(option.name, highlight) && highlight.trim() !== '' ? ' is-match' : ''
+              }`}
               key={`${column.socketIndex}:${option.hash}`}
               title={option.description === '' ? option.name : `${option.name}\n${option.description}`}
             >

@@ -77,9 +77,12 @@ export function ItemDetailCard({
   onClose,
   onEquip,
   onToggleLock,
+  highlight = '',
 }: {
   routePath: string
   itemId: string
+  /** 当前搜索词；命中它的 perk 在卡里会被标出来。 */
+  highlight?: string
   anchor: DOMRect
   /** The row the tile already knows: name, icon, type, rarity, power. */
   anchorSummary?: HoverSummary
@@ -266,7 +269,7 @@ export function ItemDetailCard({
             {state.detail.columns.length > 0 && (
               <section className="inventory-hover-sockets">
                 <h3>{state.detail.kind === 'armor' ? '护甲模组' : '武器特性'}</h3>
-                <PerkColumns columns={state.detail.columns} />
+                <PerkColumns columns={state.detail.columns} highlight={highlight} />
               </section>
             )}
 
