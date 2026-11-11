@@ -223,6 +223,10 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
 | `src/client/agent/session-adapter.ts` | Session 接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**不认识 React**，契约本地声明。 |
 | `src/client/agent/conversation.ts` | 对话状态机（A4）：`change.kind` 决定替换/前插/追加/定型。**不画 UI、不认 DSH 事件类型**。 |
+| `src/client/agent/tool-pairs.ts` | 工具调用与结果**按 `callId` 配对**，支持结果先到；`toolStatus` 给出 pending/done/failed。 |
+| `src/client/agent/message-view.ts` | 行 → 气泡：把 Controller 的输出摊成界面字段，**不读 DSH 事件流**。 |
+| `src/client/agent/use-conversation.ts` | 会话的 React 接线：attach、喂事件、交出发送结果。**不维护第二份状态**。 |
+| `src/client/agent/DockChat.tsx` | 悬浮窗里的对话界面：气泡、流式、工具行、错误、输入框。只读 Controller。 |
 | `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
 | `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |
 | `src/client/index.ts` | 客户端入口：把面板注册进宿主槽位。 |

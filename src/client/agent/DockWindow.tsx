@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { DOCK_SIZE, clampDock, defaultDock, loadDock, refit, saveDock } from './dock-position'
+import { DockChat } from './DockChat'
+import type { SessionDeps } from './session-adapter'
 import type { DockState } from './dock-position'
 
 /** 拖动时不要每帧都写 localStorage。 */
@@ -38,7 +40,7 @@ function initialState(): DockState {
   return refit(stored, view)
 }
 
-export function DockWindow(): ReactElement {
+export function DockWindow({ sessions = null }: { sessions?: SessionDeps | null } = {}): ReactElement {
   const [state, setState] = useState<DockState>(initialState)
   /** 拖动中的起点，用 ref 避免每次 move 都重渲染。 */
   const drag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
@@ -145,7 +147,7 @@ export function DockWindow(): ReactElement {
       </div>
       {!state.collapsed && (
         <div className="inventory-dock__body">
-          <p className="inventory-dock__hint">Agent 会话在下一阶段接入。</p>
+          <DockChat sessions={sessions} />
         </div>
       )}
     </div>

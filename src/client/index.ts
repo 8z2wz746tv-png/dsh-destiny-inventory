@@ -4,6 +4,7 @@ import { InventoryPanel } from './InventoryPanel'
 import type { ClientSlotSeam } from './slots'
 import { ensureStyles } from './styles'
 import { DockWindow } from './agent/DockWindow'
+import type { SessionDeps } from './agent/session-adapter'
 import { ensureDockStyles } from './agent/styles-dock'
 
 /**
@@ -29,7 +30,7 @@ const DEFAULT_ROUTE_PATH = '/dsh-destiny-inventory'
 
 // Static array: cordis rejects a function form, and a missing entry fails at
 // activation with "cannot get property ... without inject" (guide §7.3).
-export const inject = ['slots']
+export const inject = ['slots', 'sessions']
 
 /**
  * Register the sidebar row and the page.
@@ -69,7 +70,15 @@ export function apply(ctx: Context): void {
   disposers.push(
     // 悬浮窗：order 1100 越过 dsh-plugin-session-panes 的 1000，避免被它压住。
     slots.inject('shell.overlay', () =>
-      slots.register({ name: 'shell.overlay', id: 'destiny-dock', order: 1100 }, DockWindow),
+      slots.register(
+        {
+          name: 'shell.overlay',
+          id: 'destiny-dock',
+          order: 1100,
+          inject: () => ({ sessions: (ctx as unknown as { sessions: SessionDeps }).sessions }),
+        },
+        DockWindow,
+      ),
     ),
   )
   ctx.effect(() => () => {

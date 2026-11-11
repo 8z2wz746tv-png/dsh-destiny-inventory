@@ -58,8 +58,63 @@ const DOCK_STYLES = `
   padding: 0 2px;
 }
 .inventory-dock__toggle:hover { opacity: 1; }
-.inventory-dock__body { flex: 1 1 auto; padding: 10px; overflow: auto; cursor: default; }
+.inventory-dock__body { flex: 1 1 auto; padding: 10px; overflow: hidden; cursor: default; min-height: 0; }
+.inventory-dock__chat { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.inventory-dock__log { flex: 1 1 auto; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
 .inventory-dock__hint { margin: 0; opacity: .5; line-height: 1.5; }
+.inventory-dock__bubble {
+  padding: 7px 9px;
+  border-radius: 8px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 92%;
+}
+.inventory-dock__bubble.is-user { align-self: flex-end; background: rgba(90, 150, 255, .22); }
+.inventory-dock__bubble.is-assistant { align-self: flex-start; background: rgba(255, 255, 255, .07); }
+.inventory-dock__bubble.is-streaming { opacity: .82; border-left: 2px solid rgba(240, 217, 138, .6); }
+.inventory-dock__bubble.is-error { align-self: stretch; background: rgba(255, 90, 90, .16); color: #ffb3b3; }
+.inventory-dock__tool {
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, .03);
+}
+.inventory-dock__tool.is-failed { border-color: rgba(255, 90, 90, .45); }
+.inventory-dock__tool-head { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+.inventory-dock__tool-name { font-weight: 600; opacity: .9; }
+.inventory-dock__tool-status { opacity: .6; }
+.inventory-dock__tool.is-pending .inventory-dock__tool-status { color: #f0d98a; }
+.inventory-dock__tool-result {
+  margin: 6px 0 0;
+  max-height: 90px;
+  overflow: auto;
+  font-size: 10px;
+  opacity: .7;
+  white-space: pre-wrap;
+}
+.inventory-dock__composer { display: flex; gap: 6px; flex: none; }
+.inventory-dock__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .3);
+  color: inherit;
+  font: inherit;
+  padding: 6px 8px;
+}
+.inventory-dock__send {
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .08);
+  color: inherit;
+  font: inherit;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.inventory-dock__send:disabled { opacity: .4; cursor: default; }
 `
 
 /**
