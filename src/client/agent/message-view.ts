@@ -51,6 +51,22 @@ function textOf(raw: unknown): string {
     .join('\n')
 }
 
+/**
+ * 这条 user 消息是不是**真的由玩家打的**。
+ *
+ * **探针实证（2026-11-12）**：`user/message` 的 `data.source.kind` 有区分——
+ * `'user'` 是玩家输入，`'agent-instructions'` / `'runtime-context'` / 别的是 DSH 注入的
+ * 上下文（AGENTS.md、沙箱策略、时间、MCP 提示…）。它们同样是 `role: 'user'`，
+ * 不挡就会在界面上变成一串冒充玩家发言的长文本。
+ *
+ * **按这个字段筛，不按正文内容猜**：换一种注入格式，`kind` 仍然不是 `'user'`。
+ * 认不出来的一律当注入处理——少显示一条，好过多一条假的。
+ */
+function isTypedByHuman(raw: unknown): boolean {
+  const source = (raw as { data?: { source?: { kind?: unknown } } } | null)?.data?.source
+  return source?.kind === 'user'
+}
+
 /** 事件类型 → 角色。 */
 function roleOf(kind: string): Bubble['role'] {
   if (kind === 'user') return 'user'
@@ -100,6 +116,8 @@ export function bubblesOf(state: ConversationState): Bubble[] {
       })
       continue
     }
+    // 注入的 user 消息不进时间线；assistant / tool 不受影响。
+    if (line.kind === 'user' && !isTypedByHuman(line.raw)) continue
     out.push({ key: line.key, role: roleOf(line.kind), text: textOf(line.raw) })
   }
   return out

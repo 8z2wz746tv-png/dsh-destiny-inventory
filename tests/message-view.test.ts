@@ -14,7 +14,16 @@ const state = (lines: unknown[], streaming: ConversationState['streaming'] = nul
 const textMsg = (seq: number, type: string, text: string) => ({
   key: `e${seq}`,
   kind: type.split('/')[0],
-  raw: { type, seq, data: { message: { role: 'assistant', content: [{ type: 'text', text }] } } },
+  raw: {
+    type,
+    seq,
+    // user/message 的正文在 data.content；assistant 在 data.message.content。
+    // 探针实证：玩家的 user 消息带 source.kind === 'user'。
+    data:
+      type === 'user/message'
+        ? { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text }] }
+        : { message: { role: 'assistant', content: [{ type: 'text', text }] } },
+  },
 })
 
 describe('气泡', () => {
@@ -117,5 +126,39 @@ describe('消息正文的层级与块类型', () => {
       },
     }
     expect(bubblesOf(state([line]))[0].text).toBe('真的')
+  })
+})
+
+describe('注入的 user 消息', () => {
+  const injected = (seq: number, kind: string, text: string) => ({
+    key: `e${seq}`,
+    kind: 'user',
+    raw: { type: 'user/message', seq, data: { role: 'user', source: { kind }, content: [{ type: 'text', text }] } },
+  })
+
+  it('drops context that arrives as a user message', () => {
+    // 探针原样：这几条都是 role:'user'，靠 source.kind 区分。
+    const lines = [
+      textMsg(8, 'user/message', '测试一下'),
+      injected(9, 'agent-instructions', '<system-reminder> The following instructions are ACTIVE…'),
+      injected(10, 'runtime-context', 'Current runtime context. This snapshot supersedes…'),
+      textMsg(20, 'assistant/message', '在的。'),
+    ]
+    // Injectable violation: 不筛就把三行注入当玩家发言画出来。
+    expect(bubblesOf(state(lines)).map((b) => b.text)).toEqual(['测试一下', '在的。'])
+  })
+
+  it('treats an unknown source kind as injected', () => {
+    const lines = [injected(1, 'some-new-context-form', '未来某种注入')]
+    // 认不出来的一律当注入：少一条好过多一条假的。
+    expect(bubblesOf(state(lines))).toHaveLength(0)
+  })
+
+  it('does not touch assistant or tool rows', () => {
+    const lines = [
+      { key: 'e1', kind: 'tool', raw: { type: 'tool/call', seq: 1, data: { callId: 'c1', name: 'bash', arguments: '{}' } } },
+      textMsg(2, 'assistant/message', '好的'),
+    ]
+    expect(bubblesOf(state(lines)).map((b) => b.role)).toEqual(['tool', 'assistant'])
   })
 })
