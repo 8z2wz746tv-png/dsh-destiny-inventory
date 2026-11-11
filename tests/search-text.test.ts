@@ -72,3 +72,14 @@ describe('接进筛选', () => {
     expect(matchesFilters(row, query('快速拔枪'))).toBe(false)
   })
 })
+
+describe('宿主比前端旧的时候', () => {
+  it('an array payload degrades to no index instead of throwing', () => {
+    // 真机上崩过一次：宿主还在跑旧构建，`/search-index` 返回数组，
+    // 而 `payload.items` 是 undefined——`for...of` 抛错，整个面板挂掉。
+    // Injectable violation: drop the guard and `useMemo` throws during render.
+    const old = [{ id: 'w1', name: '弑后者', types: '', perks: [] }] as unknown as SearchPayload
+    expect(() => haystackOf(old)).not.toThrow()
+    expect(haystackOf(old)('w1')).toBe('')
+  })
+})

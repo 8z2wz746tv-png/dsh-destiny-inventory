@@ -14,7 +14,10 @@ export type Haystack = (id: string) => string
  * @returns 查文本的函数。索引缺失时返回空串，调用方会退回按名称匹配。
  */
 export function haystackOf(payload: SearchPayload | null): Haystack {
-  if (payload === null) return () => ''
+  // 形状不对就当作没有索引。宿主和前端是同一份包，但**装上去的可能是旧构建**——
+  // 那时 `/search-index` 还是一个数组。这个判断让旧宿主退化成"只按名称搜"，
+  // 而不是让整个面板崩在 useMemo 里。
+  if (payload === null || !Array.isArray(payload.items)) return () => ''
   const byId = new Map<string, string>()
   for (const item of payload.items) {
     const parts = [item.name, item.types]
