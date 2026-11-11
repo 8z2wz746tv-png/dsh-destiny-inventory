@@ -14,6 +14,8 @@ import type { ManifestStatus } from '../bungie/manifest'
 import { pickPrimaryMembership, readMemberships } from '../bungie/memberships'
 import type { DestinyMembership } from '../bungie/memberships'
 import { readAllDetails } from './details-bulk'
+import { buildSearchIndex } from './search-index'
+import type { SearchEntry } from './search-index'
 import { resolveItemState } from './item-state-route'
 import { SnapshotCache } from './snapshot-cache'
 import { runItemWrite } from './item-write'
@@ -26,7 +28,6 @@ import { CLASS_LOCATION, toItemRows, toProfileView } from './dto'
 import { toItemSources } from './item-sources'
 import type { DefinitionLookup } from './dto'
 import type { AccountIdentity, InventorySnapshot, ItemDetailView, PlayerProfileView } from './types'
-
 
 export interface BungieServiceOptions {
   tokenPath: string
@@ -163,13 +164,7 @@ export class BungieService {
     return toProfileView(snapshot, (hash) => this.store().titleName(hash))
   }
 
-  /**
-   * Which account this bridge is signed in as.
-   *
-   * Deliberately does NOT read the profile: the browser calls this before it may
-   * paint a cached snapshot, so it has to answer from the membership endpoint and
-   * its cache, not from a 7–15 second profile read.
-   */
+  /** 这个桥接登录的是哪个账号。**刻意不读 profile**——浏览器在画缓存之前就问，答不出来 7–15 秒就别想上屏。 */
   async identity(): Promise<AccountIdentity> {
     const membership = await this.currentMembership()
     return { membershipType: membership.membershipType, membershipId: membership.membershipId }
@@ -215,24 +210,30 @@ export class BungieService {
     return { snapshot, definitions: this.definitions() }
   }
 
-  /** The location key an item is in right now; null when the snapshot lacks it. */
+  /** 一件物品此刻的位置；快照里没有就是 null。 */
   async locationOf(instanceId: string): Promise<string | null> {
     // The snapshot stores a character id for anything a character holds; translate
     // through the read-back's helper so the journal speaks one vocabulary, not two.
     return resolveItemState(await this.currentSnapshot(), instanceId)?.location ?? null
   }
 
-  /** Where one item is right now (`null` when gone); forces a fresh read. */
+  /** 一件物品此刻的位置（不在了就是 null）；强制刷新读。 */
   async itemState(instanceId: string) {
     return resolveItemState(await this.currentSnapshot(true), instanceId)
   }
 
-  /** Every detail in one payload; the client warms its cache in one request. */
+  /** 全部详情一次给出，前端一个请求预热缓存。 */
   async details(options: { force?: boolean } = {}): Promise<Record<string, ItemDetailView>> {
     return readAllDetails(this, options)
   }
 
-  /** Badge artwork for tiles; static for the life of the manifest. */
+  /** 搜索索引：直接吃 310 的可选池，不吃详情卡的白名单。 */
+  async searchIndex(): Promise<SearchEntry[]> {
+    const { snapshot, definitions } = await this.detailSource()
+    return buildSearchIndex(snapshot.items, definitions)
+  }
+
+  /** 格子角标；manifest 生命周期内不变。 */
   overlays(): { crafted: string; craftedBackground: string; tiers: string[] } {
     return (this.overlayCache ??= this.store().iconOverlays())
   }

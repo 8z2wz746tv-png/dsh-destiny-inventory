@@ -161,6 +161,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
           return
         }
+        if (query === '/search-index') return sendJson(res, 200, { ok: true, data: await service.searchIndex() } satisfies BridgeResponse<unknown>)
         if (query === '/details') {
           const data = await service.details({ force: url.searchParams.get('refresh') === '1' })
           sendJson(res, 200, { ok: true, data } satisfies BridgeResponse<unknown>)
