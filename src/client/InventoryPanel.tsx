@@ -15,6 +15,7 @@ import { useItemActions } from './use-item-actions'
 import { PendingOps } from './pending-ops'
 import { loadInventory } from './load-inventory'
 import { Receipts } from './Receipts'
+import { useSearchIndex } from './use-search-index'
 import { useViewReport } from './use-view-report'
 import { viewOf } from './view-reporter'
 import { useReceipts } from './use-receipts'
@@ -27,7 +28,6 @@ type LoadState =
   | { kind: 'loading' }
   /* `observed` 是未叠 overlay 的原始行；`patchRows` 不碰它 */
   | { kind: 'ready'; snapshot: InventorySnapshot; observed: ItemRow[]; profile: PlayerProfileView }
-
 
 
 
@@ -186,9 +186,10 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
 
   const items = state.kind === 'ready' ? state.snapshot.items : []
   const profile = state.kind === 'ready' ? state.profile : undefined
+  const searchIndex = useSearchIndex(routePath)
   const sections = useMemo(
-    () => buildSections(items, filters, { layout, activeCharacter }),
-    [items, filters, layout, activeCharacter],
+    () => buildSections(items, filters, { layout, activeCharacter, haystack: searchIndex }),
+    [items, filters, layout, activeCharacter, searchIndex],
   )
   /**
    * 页面顺序 + 常驻货架：邮局与水晶空着也占位，其余有货才出现。
@@ -203,11 +204,10 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
   }, [sections])
 
   const types = useMemo(() => availableTypes(items), [items])
-  const visibleCount = sections.reduce((sum, section) => sum + section.itemCount, 0)
+  const visibleCount = sections.reduce((sum, s2) => sum + s2.itemCount, 0)
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 
-  // 「这件」从这里答，但给的是三个来源，不是一个位置。
-  const picked = hoverCard.target === null ? undefined : itemById.get(hoverCard.target.id)
+  const picked = hoverCard.target === null ? undefined : itemById.get(hoverCard.target.id) // 「这件」
   const observedRow = state.kind === 'ready' && picked ? state.observed.find((i) => i.instanceId === picked.instanceId) : undefined
   const selection = picked && {
     picked, observed: observedRow, operation: pending.get(picked.instanceId),

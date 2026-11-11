@@ -1,4 +1,5 @@
 import type { JournalLine } from './journal-reduce'
+import type { SearchPayload } from '../host/search-index'
 import type {
   AccountIdentity,
   ActionReceipt,
@@ -54,6 +55,11 @@ export async function readBridge<T>(url: string, signal: AbortSignal): Promise<T
  * whose cache to read before it may paint, not after a profile read. */
 export function fetchAccount(routePath: string, signal: AbortSignal): Promise<AccountIdentity> {
   return readBridge<AccountIdentity>(`${routePath}/account`, signal)
+}
+
+/** 搜索索引：可搜文本 + 去重后的描述表。 */
+export function fetchSearchIndex(routePath: string, signal: AbortSignal): Promise<SearchPayload> {
+  return readBridge<SearchPayload>(`${routePath}/search-index`, signal)
 }
 
 /** Recent journal entries, newest first. */
@@ -148,12 +154,7 @@ export function readItemDetailCached(
 }
 
 /**
- * Warm every detail in one request.
- *
- * Per-item prefetching lost the race with the pointer: 1924 requests, and the
- * vault (most of the account) sat at the head of the queue. The host builds them
- * all in one pass instead — DIM's approach, kept on our side.
- * @param routePath - bridge base pathname.
+ * 一次预热全部详情：1924 个单件请求抢不过指针，宿主一次批量建完。
  * @param signal - caller-owned cancellation.
  */
 export function warmDetails(routePath: string, signal: AbortSignal): void {

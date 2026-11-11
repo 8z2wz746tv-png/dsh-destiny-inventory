@@ -67,6 +67,8 @@ export interface SectionOptions {
   layout?: LayoutMode
   /** Character shown in medium mode. */
   activeCharacter?: string
+  /** 搜索索引提供的可搜文本；缺省时只按名称匹配。 */
+  haystack?: (id: string) => string
 }
 
 /** One store's slice of a row. */
@@ -230,7 +232,7 @@ export function buildSections(
 ): CategorySection[] {
   const layout = options.layout ?? 'wide'
   const activeCharacter = options.activeCharacter ?? 'hunter'
-  const visible = items.filter((item) => matchesFilters(item, filters))
+  const visible = items.filter((item) => matchesFilters(item, filters, options.haystack))
   const bySection = new Map<string, Map<number | null, { label: string; items: ItemRow[] }>>()
   for (const item of visible) {
     const section = sectionOf(item)

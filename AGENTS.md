@@ -237,6 +237,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/settle-by-readback.ts` | 失败后按 Bungie 的真实位置落定，不回滚到可能已经过期的快照。 |
 | `src/client/load-inventory.ts` | 三段加载：**先问账号** → 画缓存（只叠 overlay，不核验）→ 网络回来才 reconcile 并写缓存。**loadId 代次 + 账号比对**，旧的/别家的响应不许上屏。 |
 | `src/client/snapshot-db.ts` | 浏览器里留一份上次的库存（**按账号分键**）。只负责存，不负责核验；任何失败都降级成"没有缓存"。 |
+| `src/client/use-search-index.ts` | 拉一次搜索索引并给出 haystack。**索引失败不影响库存**：吞掉错误、退回按名称搜。 |
 | `src/client/api.ts` | 桥接请求 + 详情缓存（promise 与已解析值两份）。**浏览器唯一出口**。 |
 | `src/client/use-receipts.ts` | 回执栈：5 秒自动消失、可取消、排队中改文案。 |
 | `src/client/Receipts.tsx` | 回执渲染。 |
