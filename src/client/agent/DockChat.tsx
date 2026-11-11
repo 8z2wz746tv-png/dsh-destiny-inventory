@@ -22,7 +22,11 @@ function ToolBubble({ bubble }: { bubble: Bubble }): ReactElement {
         <span className="inventory-dock__tool-name">{tool.name === '' ? '工具' : tool.name}</span>
         <span className="inventory-dock__tool-status">{label}</span>
       </div>
-      {tool.result !== null && <pre className="inventory-dock__tool-result">{tool.result.slice(0, 400)}</pre>}
+      {tool.result !== null && (
+        <pre className="inventory-dock__tool-result" onPointerDown={(event) => event.stopPropagation()}>
+          {tool.result.slice(0, 400)}
+        </pre>
+      )}
     </div>
   )
 }
@@ -65,6 +69,8 @@ export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactE
       <div className="inventory-dock__composer">
         <input
           className="inventory-dock__input"
+          // 浮窗整体挂了拖动，`setPointerCapture` 会吞掉内部点击——交互控件必须自己挡住。
+          onPointerDown={(event) => event.stopPropagation()}
           value={draft}
           placeholder="问点什么…"
           onChange={(event) => setDraft(event.target.value)}
@@ -78,6 +84,7 @@ export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactE
         <button
           type="button"
           className="inventory-dock__send"
+          onPointerDown={(event) => event.stopPropagation()}
           disabled={phase === 'sending' || draft.trim() === ''}
           onClick={() => void submit()}
         >

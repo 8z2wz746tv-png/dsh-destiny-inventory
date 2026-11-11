@@ -184,11 +184,13 @@ describe('状态类事件不是消息', () => {
         { type: 'event', event: { type: 'turn/start', seq: 2 } },
         { type: 'event', event: { type: 'request/header', seq: 3 } },
         { type: 'event', event: { type: 'session/title', seq: 4 } },
-        user(5),
+        { type: 'event', event: { type: 'system/message', seq: 5 } },
+        user(6),
       ]),
     )
     // Injectable violation: drop the whitelist and the panel opens with five phantom rows.
-    expect(c.snapshot().lines.map((l) => l.key)).toEqual(['e5'])
+    // system/message 也不进：真机上它是注入的系统提示词。
+    expect(c.snapshot().lines.map((l) => l.key)).toEqual(['e6'])
   })
 
   it('keeps tool call and result as two separate rows', () => {

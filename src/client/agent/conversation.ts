@@ -65,13 +65,15 @@ const EMPTY: ConversationState = {
  * 它们都是状态记录，不是对话。不过滤的话，第一次打开就是几十条假消息。
  *
  * `tool/call` 与 `tool/result` 是**两个独立的类型**，不是一条消息的两个阶段。
+ *
+ * **`system/message` 不在里面**：真机上它装的是注入的系统提示词，画出来就是一条
+ * 不该给玩家看的长文本。它不是对话。
  */
 const RENDERED = new Set([
   'user/message',
   'assistant/message',
   'tool/call',
   'tool/result',
-  'system/message',
 ])
 
 /** 从 `event.type` 取前缀（`assistant/message` → `assistant`）。 */
