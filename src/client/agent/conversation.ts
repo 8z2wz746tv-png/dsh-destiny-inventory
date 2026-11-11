@@ -15,6 +15,8 @@
  * - 分页 → 向前插入，不动末尾
  */
 
+import type { SessionWindow } from './session-adapter'
+
 /** 一行定型内容。`raw` 留给 A5 解释，Controller 不碰。 */
 export interface ConversationLine {
   /** 稳定 id：同一条消息在多次刷新后必须是同一个。 */
@@ -40,18 +42,6 @@ export interface ConversationState {
   readonly error: string | null
 }
 
-/** 事件窗口的最小形状，与 Adapter 声明的一致。 */
-interface Window {
-  readonly entries: readonly unknown[]
-  readonly hasMore: boolean
-  readonly revision: number
-  readonly change:
-    | { readonly kind: 'replace'; readonly entries: readonly unknown[] }
-    | { readonly kind: 'prepend'; readonly entries: readonly unknown[] }
-    | { readonly kind: 'append'; readonly entries: readonly unknown[] }
-    | { readonly kind: 'settle-assistant'; readonly attemptId: string; readonly entry?: unknown }
-}
-
 /** 条目：定型事件或流式块。 */
 interface Entry {
   readonly type: 'event' | 'transient'
@@ -66,6 +56,23 @@ const EMPTY: ConversationState = {
   loadingOlder: false,
   error: null,
 }
+
+/**
+ * 哪些 `event.type` 是**要显示成一行**的。
+ *
+ * 探针实测（2026-11-11）初始窗口里混着 `permission/preset`、`sandbox/mode`、
+ * `turn/start`、`step/start`、`request/header`、`session/title` 等十几种事件——
+ * 它们都是状态记录，不是对话。不过滤的话，第一次打开就是几十条假消息。
+ *
+ * `tool/call` 与 `tool/result` 是**两个独立的类型**，不是一条消息的两个阶段。
+ */
+const RENDERED = new Set([
+  'user/message',
+  'assistant/message',
+  'tool/call',
+  'tool/result',
+  'system/message',
+])
 
 /** 从 `event.type` 取前缀（`assistant/message` → `assistant`）。 */
 function kindOf(event: { type?: string } | undefined): string {
@@ -112,7 +119,7 @@ export class Conversation {
    * 应用一次窗口变更。
    * @param window - Adapter 交来的窗口。
    */
-  accept(window: Window): void {
+  accept(window: SessionWindow): void {
     const change = window.change
     switch (change.kind) {
       case 'replace':
@@ -224,10 +231,12 @@ export class Conversation {
   }
 }
 
-/** `event` 条目转成一行；`transient` 不算行。 */
+/** `event` 条目转成一行；`transient` 与状态类事件都不算行。 */
 function toLine(raw: unknown): ConversationLine | null {
   const entry = raw as Entry
   if (entry?.type !== 'event') return null
+  const type = entry.event?.type ?? ''
+  if (!RENDERED.has(type)) return null
   const seq = entry.event?.seq ?? 0
   return { key: `e${seq}`, kind: kindOf(entry.event), raw: entry.event }
 }

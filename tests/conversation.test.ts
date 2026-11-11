@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { Conversation, chunkText } from '../src/client/agent/conversation'
 
 const event = (seq: number, type = 'assistant/message') => ({ type: 'event', event: { type, seq } })
-const tool = (seq: number) => ({ type: 'event', event: { type: 'tool/message', seq } })
+const tool = (seq: number) => ({ type: 'event', event: { type: 'tool/call', seq } })
 const user = (seq: number) => ({ type: 'event', event: { type: 'user/message', seq } })
 const chunk = (attemptId: string, text: string) => ({
   type: 'transient',
@@ -137,5 +137,37 @@ describe('chunk 文本提取', () => {
     // 没见过的形状返回空串：宁可少一段增量，也不能把整条流打断。
     expect(chunkText({ weird: 1 })).toBe('')
     expect(chunkText(null)).toBe('')
+  })
+})
+
+describe('状态类事件不是消息', () => {
+  it('drops the bookkeeping events the real window carries', () => {
+    // 探针实测：初始窗口第一条就是 permission/preset，后面跟着 turn/start、
+    // request/header 等十几种。它们必须被挡在对话之外。
+    const c = new Conversation()
+    c.accept(
+      replace([
+        { type: 'event', event: { type: 'permission/preset', seq: 0 } },
+        { type: 'event', event: { type: 'sandbox/mode', seq: 1 } },
+        { type: 'event', event: { type: 'turn/start', seq: 2 } },
+        { type: 'event', event: { type: 'request/header', seq: 3 } },
+        { type: 'event', event: { type: 'session/title', seq: 4 } },
+        user(5),
+      ]),
+    )
+    // Injectable violation: drop the whitelist and the panel opens with five phantom rows.
+    expect(c.snapshot().lines.map((l) => l.key)).toEqual(['e5'])
+  })
+
+  it('keeps tool call and result as two separate rows', () => {
+    const c = new Conversation()
+    c.accept(
+      replace([
+        { type: 'event', event: { type: 'tool/call', seq: 7 } },
+        { type: 'event', event: { type: 'tool/result', seq: 8 } },
+      ]),
+    )
+    expect(c.snapshot().lines.map((l) => l.kind)).toEqual(['tool', 'tool'])
+    expect(c.snapshot().lines.map((l) => l.key)).toEqual(['e7', 'e8'])
   })
 })

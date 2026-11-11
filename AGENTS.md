@@ -222,6 +222,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 |---|---|
 | `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
 | `src/client/agent/session-adapter.ts` | Session 接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**不认识 React**，契约本地声明。 |
+| `src/client/agent/probe.tsx` | **临时探针**，只在 `?probe=1` 时注册。dump 真实事件窗口结构，跑完即删。 |
 | `src/client/agent/conversation.ts` | 对话状态机（A4）：`change.kind` 决定替换/前插/追加/定型。**不画 UI、不认 DSH 事件类型**。 |
 | `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
 | `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |

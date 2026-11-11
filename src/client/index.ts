@@ -5,6 +5,7 @@ import type { ClientSlotSeam } from './slots'
 import { ensureStyles } from './styles'
 import { DockWindow } from './agent/DockWindow'
 import { ensureDockStyles } from './agent/styles-dock'
+import { Probe } from './agent/probe'
 
 /**
  * Browser half of the plugin.
@@ -29,7 +30,7 @@ const DEFAULT_ROUTE_PATH = '/dsh-destiny-inventory'
 
 // Static array: cordis rejects a function form, and a missing entry fails at
 // activation with "cannot get property ... without inject" (guide §7.3).
-export const inject = ['slots']
+export const inject = ['slots', 'sessions']  // 临时：探针要会话服务
 
 /**
  * Register the sidebar row and the page.
@@ -66,6 +67,17 @@ export function apply(ctx: Context): void {
       ),
     ),
   )
+  // 临时探针：只在 ?probe=1 时出现，跑完删除（连同上面 inject 里的 'sessions'）。
+  if (typeof location !== 'undefined' && location.search.includes('probe=1')) {
+    disposers.push(
+      slots.inject('shell.overlay', () =>
+        slots.register(
+          { name: 'shell.overlay', id: 'destiny-probe', order: 900, inject: () => ({ sessions: (ctx as unknown as { sessions: never }).sessions }) },
+          Probe,
+        ),
+      ),
+    )
+  }
   disposers.push(
     // 悬浮窗：order 1100 越过 dsh-plugin-session-panes 的 1000，避免被它压住。
     slots.inject('shell.overlay', () =>

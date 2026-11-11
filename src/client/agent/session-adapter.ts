@@ -32,8 +32,8 @@ export interface EventSubscription {
 export interface AgentSession {
   /** 这个会话的 id；关窗后仍然可读，下次用它恢复。 */
   readonly sessionId: string
-  /** 发一条纯文本。 */
-  send(text: string): Promise<void>
+  /** 发一条纯文本；**返回值必须看**，失败不会抛。 */
+  send(text: string): Promise<unknown>
   /** 订阅事件窗口；同一时间只有一份订阅。 */
   subscribe(listener: (window: SessionWindow) => void): EventSubscription
   /** 释放引用并退订。**不销毁会话**。 */
@@ -150,10 +150,10 @@ class LiveSession implements AgentSession {
     private readonly binding: Binding,
   ) {}
 
-  async send(text: string): Promise<void> {
+  async send(text: string): Promise<unknown> {
     const trimmed = text.trim()
-    if (trimmed === '') return
-    await (this.binding.session.prompt([{ text: trimmed }], 'queue') as Promise<unknown>)
+    if (trimmed === '') return undefined
+    return this.binding.session.prompt([{ type: 'text', text: trimmed }], 'queue')
   }
 
   subscribe(listener: (window: SessionWindow) => void): EventSubscription {
@@ -187,7 +187,16 @@ export interface SessionWindow {
   readonly entries: readonly unknown[]
   readonly hasMore: boolean
   readonly revision: number
+  /** 这一批的增量语义；`entries` 是当前窗口全量。 */
+  readonly change: SessionChange
 }
+
+/** 窗口变更：DSH 自己给语义，不用我们 diff。 */
+export type SessionChange =
+  | { readonly kind: 'replace'; readonly entries: readonly unknown[] }
+  | { readonly kind: 'prepend'; readonly entries: readonly unknown[] }
+  | { readonly kind: 'append'; readonly entries: readonly unknown[] }
+  | { readonly kind: 'settle-assistant'; readonly attemptId: string; readonly entry?: unknown }
 
 interface Observable<T> {
   getSnapshot(): T
@@ -196,7 +205,12 @@ interface Observable<T> {
 
 interface Binding {
   readonly sessionId: string
-  readonly session: { prompt(content: { text: string }[], mode: 'queue' | 'steer'): Promise<unknown> }
+  readonly session: {
+    prompt(
+      content: readonly ({ type: 'text'; text: string } | { type: 'image'; mediaType: string; data: string } | { type: 'file'; receiptId: string })[] ,
+      mode: 'queue' | 'steer',
+    ): Promise<unknown>
+  }
   readonly eventSource: Observable<SessionWindow>
 }
 

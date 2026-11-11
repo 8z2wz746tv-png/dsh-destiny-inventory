@@ -19,7 +19,12 @@ function fakeDeps(options: { readyHangs?: boolean } = {}) {
     prompts: [] as string[],
   }
   let releaseReady: (() => void) | null = null
-  const window = { entries: [] as unknown[], hasMore: false, revision: 0 }
+  const window = {
+    entries: [] as unknown[],
+    hasMore: false,
+    revision: 0,
+    change: { kind: 'replace' as const, entries: [] as unknown[] },
+  }
 
   const deps: SessionDeps = {
     async create() {
@@ -34,7 +39,7 @@ function fakeDeps(options: { readyHangs?: boolean } = {}) {
       const sink = {
         sessionId: 'session-1',
         session: {
-          async prompt(content: { text: string }[]) {
+          async prompt(content: { type: 'text'; text: string }[]) {
             state.prompts.push(content[0].text)
             return { ok: true }
           },
