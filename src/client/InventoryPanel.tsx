@@ -412,7 +412,6 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       </div>
 
       <Receipts lines={receipts.lines} onDismiss={receipts.dismiss} />
-
       {hoverCard.target !== null && (
         <ItemDetailCard
           routePath={routePath}
@@ -422,6 +421,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
           onClose={hoverCard.close}
           onEquip={(detail) => void actions.equip(detail)}
           onToggleLock={(detail) => void actions.toggleLock(detail)}
+          highlight={filters.search}
         />
       )}
 
