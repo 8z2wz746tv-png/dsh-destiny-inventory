@@ -35,7 +35,6 @@ export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactE
   const [draft, setDraft] = useState('')
   const { state, phase, error, send } = useConversation(sessions, true)
   const bubbles = bubblesOf(state)
-
   const submit = async () => {
     const text = draft.trim()
     if (text === '' || phase === 'sending') return
