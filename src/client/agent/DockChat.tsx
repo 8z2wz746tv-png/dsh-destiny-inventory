@@ -4,7 +4,7 @@
  * **只读 Controller 的状态**：气泡由 `bubblesOf` 摊出来，这里不解析任何事件，
  * 也不自己记消息。它拿到的每一样东西都能在 `Conversation` 的快照里找到。
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { bubblesOf } from './message-view'
 import type { Bubble } from './message-view'
@@ -35,6 +35,14 @@ export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactE
   const [draft, setDraft] = useState('')
   const { state, phase, error, send } = useConversation(sessions, true)
   const bubbles = bubblesOf(state)
+  const logRef = useRef<HTMLDivElement>(null)
+
+  // 新消息或流式增量到达时贴到底。没有这一步，回复会一直待在视野外面——
+  // 真机上就是"发出去了什么都看不见"。
+  useEffect(() => {
+    const element = logRef.current
+    if (element !== null) element.scrollTop = element.scrollHeight
+  }, [bubbles.length, state.streaming?.text])
   const submit = async () => {
     const text = draft.trim()
     if (text === '' || phase === 'sending') return
@@ -44,7 +52,7 @@ export function DockChat({ sessions }: { sessions: SessionDeps | null }): ReactE
 
   return (
     <div className="inventory-dock__chat">
-      <div className="inventory-dock__log">
+      <div className="inventory-dock__log" ref={logRef}>
         {bubbles.length === 0 && state.streaming === null && (
           <p className="inventory-dock__hint">还没有对话。问点什么试试。</p>
         )}
