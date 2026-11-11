@@ -59,32 +59,65 @@ ctx.sessions.retainInfo(id): ObservableSnapshot<SessionRetainInfo>
 // { referenceCount, retainedBy: { controllerOperation?, gateway? } }
 ```
 
-## 三、唯一的硬约束：`source` 只有两个值
+## 三、A1 的两处判断错了
+
+调查结束、补查上游讨论、读参考插件之后，先记两条我写错的地方——不然后面会照着错的结论走。
+
+**一、`source` 不是硬阻塞。**
+
+我只看类型声明就下了结论：
 
 ```ts
 type SessionReferenceSource = Extract<keyof SessionReferenceSourceMap, string>
-interface SessionReferenceSourceMap {
-  controllerOperation: unknown
-  gateway: unknown
-}
+interface SessionReferenceSourceMap { controllerOperation: unknown; gateway: unknown }
 ```
 
-**没有第三个值，也不能自造。** 一个世界级插件（本插件）要持有会话，只能在二者中选。
+但运行时**没有校验**——在 `dsh-cordis-client-runner` 里搜 `unknown source` / `invalid source` /
+`source is not`，一个都没有；`retainedBy` 的类型是 `Partial<Record<…, number>>`，`Partial` 本身就说明
+运行时可以缺席或出现。第三方插件 `dsh-plugin-session-panes` 传的是自由字符串
+`'sessionChatPanes'`，跑得通——它是纯 JS，所以没撞上类型闸门。
 
-这不是"能不能调"的问题，是**语义归属**的问题：这两个 key 是 DSH 自己消费方的名字，
-借用它们意味着插件的生命周期被记在别人的账上，`retainInfo` 里也会显示成
-`controllerOperation`——排查时会误导。
+**真实约束是编译期**：我们是 TS，写非枚举值 `tsc` 会报错。
 
-**三个可选的处理，需要拍板**：
+**处理**：用 `'gateway' as SessionReferenceSource`，**强转只能出现在 Session Adapter 一个文件里**，
+业务代码永远不碰这个断言。同时在该文件注释里写明：这是临时兼容，**不代表 DSH 承诺 `gateway`
+可供插件使用**，将来有了 `plugin` source 要换。
 
-| 方案 | 做法 | 代价 |
-|---|---|---|
-| **甲** | 用 `gateway` | 语义上最接近"另一个入口"；但仍是在借别人的名字 |
-| **乙** | 不常驻持有，每次操作 `using()` 包一段 | 最简单，但事件流拿不到——`using` 的回调结束就释放 |
-| **丙** | 向 DSH 提一个 `plugin` source | 正解，但要等上游；在此之前功能做不了 |
+**二、`SessionProvider` 不是通用会话渲染入口。**
 
-**我倾向甲 + 在文档里写明这是借用**，同时把"要一个 `plugin` source"作为上游诉求记下来。
-乙做不到流式，丙会阻塞整条线。
+四个可能有它的包里 `exports.SessionProvider` 全是 0。它是一个 **slot 注入的 prop**
+（`slotInject: "SidebarRightTabInjected"`），只在 `sidebar.right.pane.tab` 注册的组件里拿得到。
+官方自己的 `SidebarChatTab` 就是这么用的，参考插件抄了它。
+
+而这个槽：
+
+```
+declaredBy: "an entry in 'rightbar.session' … so it exists while that entry is mounted"
+```
+
+**只在右栏会话视图挂载时存在。** 所以它不能凭空造一个浮窗——这正是甲方案要绕开的东西。
+
+参考插件自己都写了守卫 `typeof SessionProvider !== 'function'`，说明它也不确定每个版本都有。
+
+由此确定：**不走右栏，自绘会话。**
+
+## 三点五、三个层，边界写死
+
+```
+Floating UI          窗口 / 拖动 / 收起 / 输入框 / 消息气泡
+      ↕ 只认 Controller 暴露的状态与动作
+Conversation Controller   消息状态、事件流转换、发送、取消、错误
+      ↕ 只认 Adapter 暴露的方法
+DSH Session Adapter   create / retain / release / eventSource / prompt
+```
+
+三条不许破：
+
+- **Adapter 不知道 UI 长什么样**。它不认识 React，不认识消息气泡，只吐状态与动作。
+- **UI 不碰 `SessionReference`**。窗口组件里不许出现 `.release()`、`.binding`、`retain`。
+- **强转只在 Adapter 里**。§三 说的 `as SessionReferenceSource` 就一行，别的地方没有。
+
+这三条能做成守门测试：`src/client/agent/**` 里 grep `SessionReference`，命中数必须落在一个文件里。
 
 ## 四、其余几处已确认
 
@@ -109,62 +142,91 @@ interface SessionReferenceSourceMap {
 
 ## 五、实施计划
 
-**A2 · 悬浮窗壳子**（先做，不含会话）
+把原 A4 拆成 Controller 与 UI 两个阶段——否则很容易出现"界面能显示消息，但底层事件状态没处理完"。
 
-- `shell.overlay` 注册一个窗口：拖动、收起、展开
-- 位置用 `localStorage` 记（和 `snapshot-db` 一样按账号无关，纯 UI 偏好）
-- **此时还没有会话**，只验证"浮层能挂上去、不挤压库存布局"
+| 阶段 | 内容 | 退出条件 |
+|---|---|---|
+| **A2** | `shell.overlay` 悬浮窗口 | 库存布局不变；能拖动；刷新后位置还在；迷你/完整两态可切 |
+| **A3** | Session Adapter | `create` / `retain` / `release` / `eventSource` / `prompt` 可用；preset 真绑上；**关窗后引用计数回到开窗前** |
+| **A4** | Conversation Controller | 历史初始化、流式增量、流式结束、工具调用与结果、错误与取消、窗口更新与分页——**六件事各有状态** |
+| **A5** | 消息 UI | 气泡、输入框、工具调用状态；只读 Controller |
+| **A6** | Context Bridge | 当前装备三栏注入到 prompt |
+| **A7** | 快捷任务 | 武器分析 / 平替 / 套装检查 |
 
-退出条件：库存面板在浮窗开着时布局不变；刷新后位置还在。
+**顺序不能颠倒**：A4 在 A5 之前。先让事件流的状态正确，再画它。
 
-**A3 · 会话生命周期**
+### A2：窗口本身
 
-- `sessions.create({ cwd: workspace, agentPreset })` 或复用已有
-- `retain` → 拿 `binding` → 卸载时 `release`
-- `retainInfo` 做一次断言：打开/关闭窗口三次后 `referenceCount` 回到 0
+- `ctx.slots.register('shell.overlay', { id, order }, ...)` —— `order` 要避开参考插件的 `1000`
+- 两种模式：**迷你**（一个图标 + 状态点，不遮库存）、**完整**（消息 + 输入）
+- 位置与模式存 `localStorage`，和账号无关（纯 UI 偏好）
+- **这一阶段不碰会话**，所以它失败不影响任何已有功能
 
-**这是 A3 的核心验收**：引用计数不泄漏。它比"能聊天"重要。
+### A3：Adapter 要回答的问题
 
-**A4 · 消息流**
+```ts
+interface SessionAdapter {
+  ensure(): Promise<SessionHandle>     // 已有就复用，没有就 create
+  handle(): SessionHandle | null       // 同步读，给 UI 判"有没有"
+  dispose(): void                      // release，但保留 sessionId
+  sessionId(): string | null           // 关窗后仍可读，下次 ensure 用它恢复
+}
 
-- 订阅 `eventSource`，把 `entries` 渲染成消息
-- `transient` 条目走"正在输入"，`event` 条目走气泡
-- 发送用 `session.prompt`
+interface SessionHandle {
+  id: string
+  subscribe(listener: (window: SessionEventWindow) => void): () => void
+  prompt(text: string): void
+  cancel(): void
+}
+```
 
-**A5 · 上下文注入**
+**`dispose()` 只 release，不清 `sessionId`** —— 这是"关窗不等于销毁会话"的落点。
 
-- 复用已有 `view-reporter` → `/context` 通路
-- 在 prompt 前把当前选中物品的三栏（`ItemStateView`）拼进 `PromptContentPart.text`
-- **不新开一条上下文通道**
+### A4：事件流要处理的六件事
 
-**A6 · 快捷任务**
+不能只处理 `assistant/live-chunk`。至少要分清楚：
 
-- 按当前选中物品生成按钮（分析武器 / 找平替 / 检查套装）
-- 每个按钮等价于预填一段 prompt
+| 事件 | 状态 |
+|---|---|
+| 历史初始化（`ready` 之后的第一批 `entries`） | 全量替换，不是追加 |
+| `assistant/live-chunk` | 追加到"正在生成的那条"，**不能新建** |
+| 流式结束 | 那条从 transient 转成正式消息，**不能重复** |
+| 工具调用 / 工具结果 | 独立条目，不是消息的一部分 |
+| 错误 / 取消 | 终止当前生成，保留已有内容 |
+| `hasMore` / `loadingOlder` | 分页，向上翻不重置 |
+
+**测试重点**：同一条消息在"流式中"和"流式后"各出现一次，而不是两次。
 
 ## 六、验收标准
 
-沿用你列的那张表，加两条我这边必须自己守的：
-
 | 项 | 必须达到 |
 |---|---|
-| Session | 能创建、能恢复，`agentPreset` 真的绑上（在会话里问一句能看出人设） |
-| 引用 | 开关窗口三次，`retainInfo.referenceCount` 回到 0 |
-| 事件 | 同一会话不出现重复订阅（切换三次装备后，一条消息只渲染一次） |
-| UI | 浮窗开着时库存面板宽度不变 |
-| 上下文 | 切换选中装备后，下一句话里的上下文是新装备 |
+| Session | 能创建、能恢复；`agentPreset` 真的绑上（问一句能看出人设） |
+| **引用** | 关窗后 `R_after = R_before`——**不是要求归零**，只要求我们自己不漏 |
+| 事件 | 切换装备三次，一条消息只渲染一次；流式结束后不重复 |
+| UI | 浮窗开着时库存面板宽度不变；迷你态不遮任何格子 |
+| 上下文 | 换选装备后，下一句话里是新装备 |
 | 工具 | 真能调 Destiny MCP（不是"看起来在调"） |
-| 安全 | **写操作仍走 MCP 的确认流程**；浮窗里不能直接执行变更 |
+| 安全 | 写操作仍走 MCP 的确认流程；浮窗不能直接执行变更 |
 
-## 七、这轮不做
+引用那条的写法值得强调：全局引用数可能本来就不为 0（别的地方也在用这个会话），
+所以断言的是**我们自己这一开一关不留下差额**。
 
-- 不改 `AgentSidebar` 那套原始组件设计（挂载点不存在）
-- 不做 TaskWorkspace
-- 不给浮窗加自己的 prompt 存储（会话历史在 DSH 侧）
-- 不在 Client 侧拿 token 或直连 Bungie
+## 六点五、这轮不做
 
-## 八、开工前要定的那一件事
+- 多窗口、多会话切换（先让一个 Destiny Agent Session 稳定工作）
+- 复用 `sidebar.right.pane.tab`（§三 已说明它依赖右栏挂载）
+- 自建 prompt 存储（会话历史在 DSH 侧）
+- Client 侧拿 token 或直连 Bungie
 
-**§三 的甲/乙/丙**。选甲就按"借用 `gateway`"写，选丙就先把这个诉求提出去、A2 单独做。
+## 七、那三条原始设计的组件
 
-其余部分不受它影响，可以先动 A2。
+- `AgentSidebar` —— 挂载点不存在（§二）
+- `ContextualCard` —— 由 A6 的 Context Bridge 承担，不需要独立组件
+- `TaskWorkspace` —— 不在这一版
+
+## 八、已定：甲
+
+`shell.overlay` 自绘，不依赖 `SessionProvider`，不等 #12060。
+
+A2 可以立刻开始——它不碰会话，失败也不影响任何已有功能。
