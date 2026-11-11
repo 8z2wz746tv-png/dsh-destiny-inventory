@@ -45,8 +45,16 @@ describe('套装区', () => {
     { count: 4, name: '利刃专注', description: '四件效果' },
   ]
 
-  it('passes the set through in the order it arrived', () => {
-    expect(setPanel({ hash: 1, name: '圣贤保护者', tiers })).toEqual({ name: '圣贤保护者', tiers })
+  it('passes the tiers through in order, marking which are live', () => {
+    const panel = setPanel({ hash: 1, name: '圣贤保护者', tiers, owned: 2 })
+    expect(panel).toEqual({
+      name: '圣贤保护者',
+      owned: 2,
+      tiers: [
+        { count: 2, name: '战斗冥想', description: '两件效果', active: true },
+        { count: 4, name: '利刃专注', description: '四件效果', active: false },
+      ],
+    })
   })
 
   it('an item in no set draws nothing', () => {
@@ -56,13 +64,22 @@ describe('套装区', () => {
   it('a set with no name draws nothing rather than a bare header', () => {
     // Injectable violation: render it anyway and the card shows a "套装" label
     // followed by a blank line.
-    expect(setPanel({ hash: 1, name: '', tiers })).toBeNull()
+    expect(setPanel({ hash: 1, name: '', tiers, owned: 0 })).toBeNull()
   })
 
-  it('does not decide which tier is active', () => {
-    // 激活状态需要"玩家共有这个套装几件"，是跨物品的事实，单件详情给不出来。
-    // 这条钉住的是：判定不碰它，档位原样透传。
-    const panel = setPanel({ hash: 1, name: '圣贤保护者', tiers })
-    expect(panel?.tiers.every((tier) => !('active' in tier))).toBe(true)
+  it('a count between the tiers lights up exactly the lower one', () => {
+    const three = setPanel({ hash: 1, name: '甲', tiers, owned: 3 })
+    expect(three?.tiers.map((tier) => tier.active)).toEqual([true, false])
+    const four = setPanel({ hash: 1, name: '甲', tiers, owned: 4 })
+    expect(four?.tiers.map((tier) => tier.active)).toEqual([true, true])
+  })
+
+  it('zero owned lights nothing', () => {
+    // Injectable violation: treat `owned` as always satisfied and a set the player
+    // owns nothing of shows both tiers glowing.
+    expect(setPanel({ hash: 1, name: '甲', tiers, owned: 0 })?.tiers.map((t) => t.active)).toEqual([
+      false,
+      false,
+    ])
   })
 })

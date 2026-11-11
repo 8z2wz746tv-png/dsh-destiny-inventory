@@ -128,7 +128,7 @@ describe('接到详情 DTO 上', () => {
     )
     // Injectable violation: drop `set` from the DTO and the card silently loses the
     // whole section, which looks identical to "this armor has no set".
-    expect(detail.set).toEqual(set)
+    expect(detail.set).toMatchObject({ ...set, owned: 0 })
   })
 
   it('an item in no set reports null', async () => {

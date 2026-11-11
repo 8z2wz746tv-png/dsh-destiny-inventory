@@ -10,6 +10,8 @@ import { BASE_TO_ENHANCED, ENHANCED_PERK_HASHES } from './enhanced-perks'
 import { statLines } from './stat-lines'
 import { toRarity } from './dto'
 import type { DefinitionLookup } from './dto'
+import { withOwned } from '../bungie/item-sets'
+import { countSets } from './set-counts'
 import type { ProfileItem } from '../bungie/profile'
 import type { ItemDetailView, PerkColumnView, PerkOptionView } from './types'
 
@@ -151,22 +153,19 @@ export async function readItemDetail(
   const { snapshot, definitions } = await service.detailSource(options)
   const item = snapshot.items.find((candidate) => candidate.instanceId === instanceId)
   if (item === undefined) return null
-  return buildItemDetail(item, definitions, snapshot.equippedCharacters)
+  const counts = countSets(snapshot.items, definitions.armorSet)
+  return buildItemDetail(item, definitions, snapshot.equippedCharacters, counts)
 }
 
 /**
- * Assemble one detail from a row that is already parsed.
- *
- * Split from the lookup so a bulk build walks the snapshot once instead of
- * re-resolving it per item.
- * @param item - the parsed instance.
- * @param definitions - manifest lookups.
- * @returns the detail view.
+ * 从已解析的行装配一条详情。拆出来是为了批量构建时只遍历快照一次。
+ * @param setCounts - 套装 hash → 拥有的不同部位件数（按部位去重）。
  */
 export function buildItemDetail(
   item: ProfileItem,
   definitions: DefinitionLookup,
   equippedCharacters: Set<string> = new Set(),
+  setCounts: Map<number, number> = new Map(),
 ): ItemDetailView {
   const definition = definitions.item(item.itemHash)
   const columns = columnsOf(item, definitions.plug)
@@ -185,7 +184,7 @@ export function buildItemDetail(
     locked: item.locked,
     quantity: item.quantity,
     location: item.location,
-    set: definitions.armorSet(item.itemHash),
+    set: withOwned(definitions.armorSet(item.itemHash), setCounts),
     energy:
       item.energy === null
         ? null

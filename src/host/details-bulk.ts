@@ -6,6 +6,7 @@
  * that file stays inside its ceiling.
  */
 import type { BungieService } from './bungie-service'
+import { countSets } from './set-counts'
 import { buildItemDetail } from './item-detail'
 import type { ItemDetailView } from './types'
 
@@ -20,9 +21,10 @@ export async function readAllDetails(
   options: { force?: boolean } = {},
 ): Promise<Record<string, ItemDetailView>> {
   const { snapshot, definitions } = await service.detailSource(options)
+  const setCounts = countSets(snapshot.items, definitions.armorSet)
   const out: Record<string, ItemDetailView> = {}
   for (const item of snapshot.items) {
-    out[item.key] = buildItemDetail(item, definitions, snapshot.equippedCharacters)
+    out[item.key] = buildItemDetail(item, definitions, snapshot.equippedCharacters, setCounts)
   }
   return out
 }

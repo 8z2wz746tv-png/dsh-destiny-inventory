@@ -195,6 +195,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/host/snapshot-cache.ts` | 快照三态：`current`（读者）/ `stable`（写者）/ `markStale`。写者读陈旧不是降级，是它们要的值不会变。 |
 | `src/host/dto.ts` | 线格式转换：物品行、角色行、账号头。稀有度与装备三态的口径都在这里。 |
 | `src/host/item-sources.ts` | profile 行 → `ItemSource`（`dto` 在 258 上限上，这件事挪出来）。 |
+| `src/host/set-counts.ts` | 套装件数：按**部位去重**统计拥有数（同部位多件算一件）。详情卡用它标哪几档生效。 |
 | `src/host/item-detail.ts` | 详情卡组装：插槽候选、属性行、击杀数、固有效果。 |
 | `src/host/details-bulk.ts` | 一次性构建全部详情（1924 件 ≈2.8 秒），给前端一个请求预热。 |
 | `src/host/stat-order.ts` | DIM 的属性白名单与顺序（照搬 `itemStatAllowList`）。**护甲六维不走这里**。 |

@@ -147,3 +147,11 @@ export class ItemSets {
     return this.index
   }
 }
+
+/** 套装 + 拥有件数；没有套装返回 `null`。 */
+export function withOwned(
+  set: ArmorSet | null,
+  counts: Map<number, number>,
+): (ArmorSet & { owned: number }) | null {
+  return set === null ? null : { ...set, owned: counts.get(set.hash) ?? 0 }
+}

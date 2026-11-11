@@ -61,12 +61,13 @@ export function ArmorSetPanel({ set }: { set: ArmorSetView | null }): ReactEleme
   if (panel === null) return null
   return (
     <section style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
-      <div style={{ fontSize: 11, opacity: 0.7 }}>套装</div>
+      <div style={{ fontSize: 11, opacity: 0.7 }}>套装 · 拥有 {panel.owned} 件</div>
       <div style={{ fontSize: 13, fontWeight: 600 }}>{panel.name}</div>
       {panel.tiers.map((tier) => (
-        <div key={tier.count} style={{ marginTop: 6 }}>
+        <div key={tier.count} style={{ marginTop: 6, opacity: tier.active ? 1 : 0.55 }}>
           <div style={{ fontSize: 12 }}>
             <span style={{ opacity: 0.7 }}>{tier.count} 件</span> {tier.name}
+            {tier.active && <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.8 }}>已生效</span>}
           </div>
           {tier.description !== '' && (
             <p style={{ margin: '2px 0 0', fontSize: 11, lineHeight: 1.4, opacity: 0.75 }}>

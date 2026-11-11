@@ -36,17 +36,23 @@ export function energyBar(energy: ItemDetailView['energy']): EnergyBar | null {
 /** 套装区要画成什么样；不该画时返回 `null`。 */
 export interface SetPanel {
   name: string
-  tiers: { count: number; name: string; description: string }[]
+  /** 玩家拥有的不同部位件数。 */
+  owned: number
+  /** 每一档，以及它是否已经生效（`owned >= count`）。 */
+  tiers: { count: number; name: string; description: string; active: boolean }[]
 }
 
 /**
  * @param set - 详情里的套装块；不属任何套装时是 `null`。
  * @returns `null` 表示不画套装区。
  *
- * **不判断哪一档已激活**：那需要"玩家一共拥有这个套装的几件"，是跨物品的事实，
- * 单件详情给不出来。这里只把档位与效果原样列出，不替玩家算。
+ * 哪一档生效由 `owned`（按部位去重的拥有件数）判断，这个数由 host 侧统计后随 DTO 下来。
  */
 export function setPanel(set: ArmorSetView | null): SetPanel | null {
   if (set === null || set.name === '') return null
-  return { name: set.name, tiers: set.tiers }
+  return {
+    name: set.name,
+    owned: set.owned,
+    tiers: set.tiers.map((tier) => ({ ...tier, active: set.owned >= tier.count })),
+  }
 }

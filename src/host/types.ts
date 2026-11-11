@@ -209,6 +209,8 @@ export interface ArmorSetView {
   hash: number
   name: string
   tiers: ArmorSetTierView[]
+  /** 玩家拥有的不同部位件数（按部位去重）。用来判断哪几档已生效。 */
+  owned: number
 }
 
 export interface ItemDetailView {
