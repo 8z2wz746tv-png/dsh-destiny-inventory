@@ -67,6 +67,7 @@ export function apply(ctx: Context): void {
       ),
     ),
   )
+  // 临时探针 3：只在 ?probe=3 时出现。
   disposers.push(
     // 悬浮窗：order 1100 越过 dsh-plugin-session-panes 的 1000，避免被它压住。
     slots.inject('shell.overlay', () =>

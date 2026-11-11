@@ -10,10 +10,11 @@ import type { ConversationState } from '../src/client/agent/conversation'
 const state = (lines: unknown[], streaming: ConversationState['streaming'] = null): ConversationState =>
   ({ lines, streaming, hasMore: false, loadingOlder: false, error: null }) as ConversationState
 
+// 探针实证：assistant/message 的正文在 data.message.content。
 const textMsg = (seq: number, type: string, text: string) => ({
   key: `e${seq}`,
   kind: type.split('/')[0],
-  raw: { type, seq, data: { content: [{ type: 'text', text }] } },
+  raw: { type, seq, data: { message: { role: 'assistant', content: [{ type: 'text', text }] } } },
 })
 
 describe('气泡', () => {
@@ -62,5 +63,59 @@ describe('气泡', () => {
     // 流式那条由界面单独画，不进 lines；否则会和定型消息重复。
     const b = bubblesOf(state([textMsg(1, 'assistant/message', '完')], { attemptId: 'a1', text: '正在写' }))
     expect(b.map((x) => x.text)).toEqual(['完'])
+  })
+})
+
+describe('消息正文的层级与块类型', () => {
+  it('reads content from data.message, not data', () => {
+    // 探针原样：data 里只有 turn/step/usage/stream，正文字段在 message 下。
+    const line = {
+      key: 'e20',
+      kind: 'assistant',
+      raw: {
+        type: 'assistant/message',
+        data: {
+          turn: 1,
+          step: 1,
+          message: { role: 'assistant', content: [{ type: 'text', text: '你好。' }] },
+          usage: { totalTokens: 1 },
+        },
+      },
+    }
+    // Injectable violation: 读 data.content 会拿到 undefined，气泡变空。
+    expect(bubblesOf(state([line]))[0].text).toBe('你好。')
+  })
+
+  it('drops reasoning blocks', () => {
+    // 同一份样本里 reasoning 排在 text 前面，且是空字符串。
+    const line = {
+      key: 'e20',
+      kind: 'assistant',
+      raw: {
+        type: 'assistant/message',
+        data: {
+          message: {
+            content: [
+              { type: 'reasoning', text: '' },
+              { type: 'text', text: '你好。' },
+            ],
+          },
+        },
+      },
+    }
+    // Injectable violation: 全拼会把模型思考也画进气泡。
+    expect(bubblesOf(state([line]))[0].text).toBe('你好。')
+  })
+
+  it('ignores an unknown block type rather than showing it', () => {
+    const line = {
+      key: 'e21',
+      kind: 'assistant',
+      raw: {
+        type: 'assistant/message',
+        data: { message: { content: [{ type: 'tool-reference', text: '不该显示' }, { type: 'text', text: '真的' }] } },
+      },
+    }
+    expect(bubblesOf(state([line]))[0].text).toBe('真的')
   })
 })

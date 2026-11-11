@@ -22,19 +22,30 @@ export interface Bubble {
   }
 }
 
-/** 从消息行里取正文。`content` 的结构与工具结果一致。 */
+/**
+ * 从消息行里取正文。
+ *
+ * **探针实证（2026-11-12）**：`assistant/message` 的正文在
+ * `data.message.content`，而 `data` 本身装的是 `turn` / `step` / `usage` / `stream`。
+ * 早先读 `data.content` 是错的层级——取不到，于是回落到 `data.text`，那也是空的。
+ *
+ * 只认 `type: 'text'` 的块。同一份样本里还有 `type: 'reasoning'`（模型思考，空字符串），
+ * 那不是给玩家看的内容。**按块类型取，不按文本内容猜。**
+ */
 function textOf(raw: unknown): string {
   const data = (raw as { data?: Record<string, unknown> } | null)?.data
-  const content = data?.content
+  if (data === undefined) return ''
+  const message = data.message as { content?: unknown } | undefined
+  const content = Array.isArray(message?.content) ? message.content : data.content
   if (!Array.isArray(content)) {
-    // 有的消息把正文放在 `text` 上；两条路都认。
-    const direct = data?.text
+    const direct = data.text
     return typeof direct === 'string' ? direct : ''
   }
   return content
     .map((part) => {
-      const p = part as { type?: string; text?: unknown }
-      return p.type === 'text' && typeof p.text === 'string' ? p.text : ''
+      const block = part as { type?: string; text?: unknown }
+      // `reasoning` / 工具块 / 未知类型都不进气泡。
+      return block.type === 'text' && typeof block.text === 'string' ? block.text : ''
     })
     .filter((t) => t !== '')
     .join('\n')
