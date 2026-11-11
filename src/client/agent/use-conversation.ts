@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Conversation } from './conversation'
 import { SessionAdapter } from './session-adapter'
+import { sendOutcome } from './send-result'
 import type { AgentSession, SessionDeps } from './session-adapter'
 import type { ConversationState } from './conversation'
 
@@ -72,13 +73,10 @@ export function useConversation(deps: SessionDeps | null, enabled: boolean): Con
       setPhase('sending')
       setError(null)
       try {
-        const sent = (await handle.send(text)) as { ok?: boolean; error?: { code?: string } } | undefined
         // **必须看返回值**：探针里就是这样丢过一次 `gateway/input-invalid`。
-        if (sent?.ok === false) {
-          setError(`发送被拒：${sent.error?.code ?? '未知原因'}`)
-          return false
-        }
-        return true
+        const outcome = sendOutcome(await handle.send(text))
+        if (!outcome.ok) setError(outcome.reason)
+        return outcome.ok
       } catch (err: unknown) {
         setError(`发送失败：${String(err)}`)
         return false

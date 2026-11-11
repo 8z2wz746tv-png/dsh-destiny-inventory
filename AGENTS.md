@@ -225,6 +225,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/conversation.ts` | 对话状态机（A4）：`change.kind` 决定替换/前插/追加/定型。**不画 UI、不认 DSH 事件类型**。 |
 | `src/client/agent/tool-pairs.ts` | 工具调用与结果**按 `callId` 配对**，支持结果先到；`toolStatus` 给出 pending/done/failed。 |
 | `src/client/agent/message-view.ts` | 行 → 气泡：把 Controller 的输出摊成界面字段，**不读 DSH 事件流**。 |
+| `src/client/agent/send-result.ts` | 解释 `prompt` 的返回值：**失败不抛，靠 `ok:false`**。纯函数，让这条规则能被测住。 |
 | `src/client/agent/use-conversation.ts` | 会话的 React 接线：attach、喂事件、交出发送结果。**不维护第二份状态**。 |
 | `src/client/agent/DockChat.tsx` | 悬浮窗里的对话界面：气泡、流式、工具行、错误、输入框。只读 Controller。 |
 | `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
