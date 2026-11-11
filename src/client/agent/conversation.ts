@@ -84,14 +84,25 @@ function kindOf(event: { type?: string } | undefined): string {
 /**
  * 从 chunk 里取文本。
  *
- * `StreamChunk` 的形状没在这份契约里给出，所以这里**只认几种常见字段，认不出就返回空**：
- * 宁可少显示一段增量，也不要因为一个没见过的 chunk 形状把整条流打断。
- * A5 之前会拿真实 chunk 校准一次。
+ * **探针实证**：chunk 是 `type` 驱动的判别联合——
+ * `block-start`（`blockType`）、`tool-call-delta`（`argumentsDelta`）、文本增量。
+ * 原来"挨个字段找像文本的"是错的：`tool-call-delta` 的 `argumentsDelta` 会被
+ * 误当成正文。
+ *
+ * 文本增量的确切字段名**仍未验到**（这轮抓到的三条都是工具相关），所以只认
+ * `text-delta` 这一种 type，字段名留几个候选；认不出就返回空，不影响其它块。
+ *
+ * 注意：按 type 分派**在当前数据下和按字段名硬找结果相同**——`tool-call-delta`
+ * 用的是 `argumentsDelta`，不会撞上候选字段名。这是防御性收紧，不是修 bug。
+ *
+ * @param chunk - 一个 `StreamChunk`。
+ * @returns 该 chunk 携带的正文；不是文本块就是空串。
  */
 export function chunkText(chunk: unknown): string {
   if (typeof chunk !== 'object' || chunk === null) return ''
   const c = chunk as Record<string, unknown>
-  for (const key of ['textDelta', 'text', 'delta', 'content']) {
+  if (c.type !== 'text-delta') return ''
+  for (const key of ['textDelta', 'text', 'delta']) {
     const value = c[key]
     if (typeof value === 'string') return value
   }
@@ -150,14 +161,17 @@ export class Conversation {
         this.absorbTransients(change.entries)
         return
       case 'settle-assistant': {
-        // 流式结束：把这一轮定型，并记住它已经结束。
+        // 流式结束。**探针实证：这里的 `entry` 是 undefined**——正式消息不走这条路径，
+        // 它作为独立的 `assistant/message` 经 `append` 到达。所以这里只清流式状态，
+        // 顺手把 `entry` 接住（万一某个版本给了，也不至于丢）。
         const attemptId = change.attemptId
         this.settled.add(attemptId)
         const made = toLine(change.entry)
-        const line = isLine(made) ? made : null
+        // `entry` 大概率是 undefined（探针实证），此时**不追加**：正式消息随后
+        // 作为 `assistant/message` 经 `append` 到达。
         this.state = {
           ...this.state,
-          lines: line === null ? this.state.lines : [...this.state.lines, line],
+          lines: isLine(made) ? [...this.state.lines, made] : this.state.lines,
           streaming:
             this.state.streaming?.attemptId === attemptId ? null : this.state.streaming,
           // 结束即成功：上一次的错误不再适用。

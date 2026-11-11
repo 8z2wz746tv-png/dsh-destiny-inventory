@@ -10,9 +10,10 @@ import { Conversation, chunkText } from '../src/client/agent/conversation'
 const event = (seq: number, type = 'assistant/message') => ({ type: 'event', event: { type, seq } })
 const tool = (seq: number) => ({ type: 'event', event: { type: 'tool/call', seq } })
 const user = (seq: number) => ({ type: 'event', event: { type: 'user/message', seq } })
+// 真实形状（探针实证）：chunk 是 type 驱动的；文本块用 text-delta。
 const chunk = (attemptId: string, text: string) => ({
   type: 'transient',
-  data: { attemptId, chunk: { textDelta: text } },
+  data: { attemptId, chunk: { type: 'text-delta', textDelta: text } },
 })
 const replace = (entries: unknown[], hasMore = false) =>
   ({ entries, hasMore, revision: 1, change: { kind: 'replace', entries } }) as never
@@ -56,6 +57,26 @@ describe('流式', () => {
     c.accept(append([chunk('a2', '第二轮')]))
     // 两轮连续生成：新的 attempt 必须开新的，不能接着上一轮写。
     expect(c.snapshot().streaming).toEqual({ attemptId: 'a2', text: '第二轮' })
+  })
+
+  it('settles with no entry and adds no row', () => {
+    // 探针原样：真实的 settle 只有 attemptId，没有 entry。
+    // 正式消息是随后独立到达的 assistant/message。
+    const c = new Conversation()
+    c.accept(append([chunk('a1', '内容')]))
+    c.accept(settle('a1'))
+    // Injectable violation: 假设 settle 一定带 entry，就会在真实运行时少一条消息。
+    expect(c.snapshot().lines).toHaveLength(0)
+    expect(c.snapshot().streaming).toBeNull()
+  })
+
+  it('the real order works: chunk, settle, then the message arrives', () => {
+    const c = new Conversation()
+    c.accept(append([chunk('a1', '内容')]))
+    c.accept(settle('a1'))
+    c.accept(append([event(9)]))
+    expect(c.snapshot().lines.map((l) => l.key)).toEqual(['e9'])
+    expect(c.snapshot().streaming).toBeNull()
   })
 
   it('settles without duplicating the message', () => {
@@ -131,10 +152,21 @@ describe('分页', () => {
 })
 
 describe('chunk 文本提取', () => {
-  it('knows a few shapes and never throws on the rest', () => {
-    expect(chunkText({ textDelta: 'a' })).toBe('a')
-    expect(chunkText({ text: 'b' })).toBe('b')
-    // 没见过的形状返回空串：宁可少一段增量，也不能把整条流打断。
+  it('only reads text blocks, by type', () => {
+    expect(chunkText({ type: 'text-delta', textDelta: 'a' })).toBe('a')
+    expect(chunkText({ type: 'text-delta', text: 'b' })).toBe('b')
+  })
+
+  it('ignores the tool chunks the probe actually captured', () => {
+    // 探针原样：这两条是工具参数，不是正文。
+    // Injectable violation: 按字段名硬找文本就会把 argumentsDelta 当正文塞进消息。
+    expect(chunkText({ type: 'block-start', index: 0, blockType: 'tool-call' })).toBe('')
+    expect(
+      chunkText({ type: 'tool-call-delta', index: 0, id: 'call_x', name: 'bash', argumentsDelta: '{"' }),
+    ).toBe('')
+  })
+
+  it('never throws on an unknown shape', () => {
     expect(chunkText({ weird: 1 })).toBe('')
     expect(chunkText(null)).toBe('')
   })
