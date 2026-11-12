@@ -8,6 +8,8 @@
  * 构建期依赖，我们只用其中六个方法，声明出来比拉一个会跟着宿主版本漂的包划算。
  */
 
+import { clearSessionId, readSessionId, saveSessionId } from './session-store'
+
 /** 引用来源。**这是越过类型闸门的唯一一处**，理由见 `RETAIN_SOURCE`。 */
 type Source = 'controllerOperation' | 'gateway'
 
@@ -77,16 +79,34 @@ export class SessionAdapter {
    */
   async ensure(): Promise<string> {
     if (this.id !== null) return this.id
+    // 上次用过的就复用：换面板、刷新页面都会重建组件，id 不存就等于每次都开新会话。
+    const stored = readSessionId()
+    if (stored !== null) {
+      this.id = stored
+      return stored
+    }
     this.pending ??= this.deps
       .create({ workspaceId: this.options.workspaceId, agentPreset: this.options.agentPreset })
       .then((id) => {
         this.id = id
+        saveSessionId(id)
         return id
       })
       .finally(() => {
         this.pending = null
       })
     return this.pending
+  }
+
+  /**
+   * 记下的 id 已经不在了：丢掉它，下次 `ensure` 会建新的。
+   *
+   * 会话可能被归档、也可能是 DSH 换过数据目录——那时 `retain` 拿不到 binding，
+   * 继续拿着这个 id 只会一直失败。
+   */
+  forget(): void {
+    this.id = null
+    clearSessionId()
   }
 
   private pending: Promise<string> | null = null
@@ -124,6 +144,8 @@ export class SessionAdapter {
     } catch (error) {
       // ready 失败也要把引用还回去，否则这条路径就是泄漏。
       reference.release()
+      // 存下来的 id 失效了（会话被归档、DSH 换过）：忘掉它，下一轮建新的。
+      this.forget()
       throw error
     }
   }
