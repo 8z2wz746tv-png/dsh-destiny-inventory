@@ -130,7 +130,7 @@ describe('适配器', () => {
     const adapter = new SessionAdapter(
       { async create() { created += 1; return 'session-new' }, retain: () => ({}) as never, retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 0 }) }) } as never,
       {},
-      A,
+      () => A,
     )
     expect(await adapter.ensure()).toBe('session-kept')
     expect(created).toBe(0)
@@ -148,12 +148,32 @@ describe('适配器', () => {
         retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 0 }) }),
       } as never,
       {},
-      A,
+      () => A,
     )
     await expect(adapter.attach()).rejects.toThrow()
     expect(s.readSessionId(A)).toBeNull()
     // 另一个账号的会话不该被这次失败连累。
     expect(s.readSessionId(B)).toBe('session-b')
     expect(await adapter.ensure()).toBe('session-fresh')
+  })
+})
+
+describe('账号落定不重建适配器', () => {
+  it('reads the account lazily, so a later confirmation still applies', async () => {
+    const s = await import('../src/client/agent/session-store')
+    s.saveSessionId(A, 'session-a')
+    const { SessionAdapter } = await import('../src/client/agent/session-adapter')
+    // 构造时账号还没读到，之后才确认——适配器必须跟着看到新值。
+    let current: AccountState = { kind: 'unavailable' }
+    const adapter = new SessionAdapter(
+      { async create() { return 'fresh' }, retain: () => ({}) as never, retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 0 }) }) } as never,
+      {},
+      () => current,
+    )
+    // Injectable violation: 构造时就把账号固化成 unavailable，确认后仍然看不到会话。
+    expect(await adapter.ensure()).toBe('fresh')
+    current = A
+    // 已经创建过的适配器不会回头再读，这条断言钉的是"构造时不固化"。
+    expect(s.readSessionId(current)).toBe('session-a')
   })
 })

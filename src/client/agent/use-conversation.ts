@@ -56,10 +56,13 @@ export function useConversation(
     return () => controller.abort()
   }, [routePath])
 
+  // 账号用 ref 传：adapter 只能建一次，否则账号落定会把它重建、把对话清空。
+  const accountRef = useRef<AccountState>({ kind: 'unavailable' })
+  accountRef.current = account
   const adapter = useMemo(
     // **不传 agentPreset**：`destiny` 尚未在 registry 注册，传了会被 `not-found` 拒。
-    () => (deps === null ? null : new SessionAdapter(deps, {}, account)),
-    [deps, account],
+    () => (deps === null ? null : new SessionAdapter(deps, {}, () => accountRef.current)),
+    [deps],
   )
 
   useEffect(() => {

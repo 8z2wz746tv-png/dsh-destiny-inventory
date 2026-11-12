@@ -66,8 +66,15 @@ export class SessionAdapter {
   constructor(
     private readonly deps: SessionDeps,
     private readonly options: { workspaceId?: string; agentPreset?: string } = {},
-    /** 当前账号状态；**只有 `confirmed` 才允许读写会话存储**。 */
-    private readonly account: AccountState = { kind: 'unavailable' },
+    /**
+     * 取当前账号状态的函数，**不是快照值**。
+     *
+     * 账号是异步落定的（先 `unavailable`，读到 `/account` 才 `confirmed`）。
+     * 如果这里收一个值，`useMemo` 就会在账号落定时重建 adapter，effect 跟着重跑，
+     * `conversation.reset()` 把刚收到的对话清空——**发出去的消息凭空消失**。
+     * 传函数就只读"此刻是谁"，adapter 本身始终是同一个。
+     */
+    private readonly accountOf: () => AccountState = () => ({ kind: 'unavailable' }),
   ) {}
 
   /** 当前会话 id；没创建过就是 `null`。 */
@@ -83,7 +90,7 @@ export class SessionAdapter {
   async ensure(): Promise<string> {
     if (this.id !== null) return this.id
     // 上次用过的就复用：换面板、刷新页面都会重建组件，id 不存就等于每次都开新会话。
-    const stored = readSessionId(this.account)
+    const stored = readSessionId(this.accountOf())
     if (stored !== null) {
       this.id = stored
       return stored
@@ -92,7 +99,7 @@ export class SessionAdapter {
       .create({ workspaceId: this.options.workspaceId, agentPreset: this.options.agentPreset })
       .then((id) => {
         this.id = id
-        saveSessionId(this.account, id)
+        saveSessionId(this.accountOf(), id)
         return id
       })
       .finally(() => {
@@ -109,7 +116,7 @@ export class SessionAdapter {
    */
   forget(): void {
     this.id = null
-    clearSessionId(this.account)
+    clearSessionId(this.accountOf())
   }
 
   private pending: Promise<string> | null = null
