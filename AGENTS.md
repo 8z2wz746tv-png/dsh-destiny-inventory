@@ -223,7 +223,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
 | `src/client/agent/account-state.ts` | `/account` 结果 → 账号三态（确证/不可用/未登录）。**失败不是未登录**，这决定会话能不能恢复。 |
 | `src/client/agent/session-store.ts` | 会话 id 的持久化（localStorage）。**换面板、刷新都靠它不失忆**；失效时读到就清。 |
-| `src/client/agent/session-adapter.ts` | Session 接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**不认识 React**，契约本地声明。 |
+| `src/client/agent/session-adapter.ts` | 会话接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**被取消≠会话失效**：abort 保留 id 但必须归还引用。**不认识 React**。 |
 | `src/client/agent/conversation.ts` | 对话状态机（A4）：`change.kind` 决定替换/前插/追加/定型。**不画 UI、不认 DSH 事件类型**。 |
 | `src/client/agent/context-prompt.ts` | `/context` 的视图 → prompt：焦点职业、选中物品、未核验/回滚位置。**只说事实，没有的字段不加**。 |
 | `src/client/agent/quick-actions.ts` | 按当前上下文生成快捷按钮。**没选中物品就不给"分析这件"**——那会发一句指向空的话。 |

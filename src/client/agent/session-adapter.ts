@@ -147,8 +147,10 @@ export class SessionAdapter {
     } catch (error) {
       // ready 失败也要把引用还回去，否则这条路径就是泄漏。
       reference.release()
-      // 存下来的 id 失效了（会话被归档、DSH 换过）：忘掉它，下一轮建新的。
-      this.forget()
+      // **被取消不算会话失效**：切面板、换账号都会 abort，此时 id 仍然有效，
+      // 忘掉它等于每次切面板都新开一个会话——对话就这么丢的。
+      // 只有"非取消"的失败才可能是会话真的不在了（被归档、DSH 换过数据目录）。
+      if (signal?.aborted !== true) this.forget()
       throw error
     }
   }
