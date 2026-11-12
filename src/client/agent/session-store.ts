@@ -86,6 +86,31 @@ export function saveSessionId(state: AccountState, id: string): void {
 }
 
 /**
+ * **只在存储里仍是这个值时才删**。
+ *
+ * 带条件是有原因的：一次 `open()` 可能在账号切换之后才收尾，那时当前账号槽位
+ * 已经是另一个人的会话。无条件删会把**别人的** id 清掉——这正是要避免的串写。
+ *
+ * @param state - 账号状态；不是 `confirmed` 就什么都不做。
+ * @param expected - 这次流程尝试恢复的那个 id。
+ * @returns 真的删掉了为 `true`。
+ */
+export function clearSessionIdIfMatches(state: AccountState, expected: string): boolean {
+  if (state.kind !== 'confirmed') return false
+  const key = sessionKey(state.account)
+  if (key === null) return false
+  const store = storage()
+  if (store === null) return false
+  try {
+    if (store.getItem(key) !== expected) return false
+    store.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * 丢掉这个账号记下的 id（会话已经不存在时用）。
  *
  * 只清**当前确认账号**的那一条：别的账号的会话与我们无关，不能连带删掉。

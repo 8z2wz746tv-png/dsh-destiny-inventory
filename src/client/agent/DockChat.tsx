@@ -40,7 +40,7 @@ export function DockChat({
   routePath?: string
 }): ReactElement {
   const [draft, setDraft] = useState('')
-  const { state, phase, error, send, view } = useConversation(sessions, true, routePath)
+  const { state, phase, error, send, view, blocker, retry } = useConversation(sessions, true, routePath)
   const bubbles = bubblesOf(state)
   const logRef = useRef<HTMLDivElement>(null)
 
@@ -80,6 +80,20 @@ export function DockChat({
         {state.error !== null && <div className="inventory-dock__bubble is-error">{state.error}</div>}
       </div>
       {error !== null && <div className="inventory-dock__bubble is-error">{error}</div>}
+      {blocker !== null && (
+        <div className="inventory-dock__bubble is-error">
+          {blocker}
+          <button
+            type="button"
+            className="inventory-dock__chip"
+            style={{ marginLeft: 6 }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={retry}
+          >
+            重试
+          </button>
+        </div>
+      )}
       <div className="inventory-dock__quick">
         {quickActions(view).map((action) => (
           <button

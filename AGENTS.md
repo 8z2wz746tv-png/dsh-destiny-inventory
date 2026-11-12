@@ -223,6 +223,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
 | `src/client/agent/account-state.ts` | `/account` 结果 → 账号三态（确证/不可用/未登录）。**失败不是未登录**，这决定会话能不能恢复。 |
 | `src/client/agent/session-store.ts` | 会话 id 的持久化（localStorage）。**换面板、刷新都靠它不失忆**；失效时读到就清。 |
+| `src/client/agent/session-error.ts` | 认出「会话在宿主里已不存在」。**DSH 无错误码**，只能按 message 前缀判；用 `startsWith` 不用 `includes`。 |
 | `src/client/agent/session-adapter.ts` | 会话接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**被取消≠会话失效**：abort 保留 id 但必须归还引用。**不认识 React**。 |
 | `src/client/agent/conversation.ts` | 对话状态机（A4）：`change.kind` 决定替换/前插/追加/定型。**不画 UI、不认 DSH 事件类型**。 |
 | `src/client/agent/context-prompt.ts` | `/context` 的视图 → prompt：焦点职业、选中物品、未核验/回滚位置。**只说事实，没有的字段不加**。 |
@@ -230,7 +231,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/tool-pairs.ts` | 工具调用与结果**按 `callId` 配对**，支持结果先到；`toolStatus` 给出 pending/done/failed。 |
 | `src/client/agent/message-view.ts` | 行 → 气泡：把 Controller 的输出摊成界面字段，**不读 DSH 事件流**。 |
 | `src/client/agent/send-result.ts` | 解释 `prompt` 的返回值：**失败不抛，靠 `ok:false`**。纯函数，让这条规则能被测住。 |
-| `src/client/agent/use-conversation.ts` | 会话的 React 接线：attach、喂事件、交出发送结果。**不维护第二份状态**。 |
+| `src/client/agent/use-conversation.ts` | 会话的 React 接线：attach、喂事件、交出发送结果。**账号确认是 attach 的前置条件**：`account=null`（还在查）时不建 adapter。 |
 | `src/client/agent/DockChat.tsx` | 悬浮窗里的对话界面：气泡、流式、工具行、错误、输入框。只读 Controller。 |
 | `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
 | `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |

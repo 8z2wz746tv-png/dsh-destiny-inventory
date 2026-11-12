@@ -144,17 +144,18 @@ describe('适配器', () => {
     const adapter = new SessionAdapter(
       {
         async create() { return 'session-fresh' },
-        retain: () => ({ sessionId: 'session-gone', binding: {} as never, ready: Promise.reject(new Error('gone')), release: () => {} }),
+        // 只有"会话在宿主里不存在"才清；网络错误不清（详见 session-recovery.test.ts）。
+        retain: () => ({ sessionId: 'session-gone', binding: {} as never, ready: Promise.reject(new Error('sessions.retain: unknown session session-gone')), release: () => {} }),
         retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 0 }) }),
       } as never,
       {},
       () => A,
     )
     await expect(adapter.attach()).rejects.toThrow()
-    expect(s.readSessionId(A)).toBeNull()
+    // 失效 id 已清、并重建了一次（`create` 写回了新 id）——见 session-recovery.test.ts。
+    expect(s.readSessionId(A)).toBe('session-fresh')
     // 另一个账号的会话不该被这次失败连累。
     expect(s.readSessionId(B)).toBe('session-b')
-    expect(await adapter.ensure()).toBe('session-fresh')
   })
 })
 

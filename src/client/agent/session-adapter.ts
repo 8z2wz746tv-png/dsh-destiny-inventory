@@ -8,7 +8,8 @@
  * 构建期依赖，我们只用其中六个方法，声明出来比拉一个会跟着宿主版本漂的包划算。
  */
 
-import { clearSessionId, readSessionId, saveSessionId } from './session-store'
+import { clearSessionId, clearSessionIdIfMatches, readSessionId, saveSessionId } from './session-store'
+import { abortedError, isUnknownSession } from './session-error'
 import type { AccountState } from './session-store'
 
 /** 引用来源。**这是越过类型闸门的唯一一处**，理由见 `RETAIN_SOURCE`。 */
@@ -141,25 +142,68 @@ export class SessionAdapter {
 
   private attaching: Promise<AgentSession> | null = null
 
-  private async open(signal?: AbortSignal): Promise<AgentSession> {
-    const id = await this.ensure()
-    if (signal?.aborted) throw new Error('attach aborted')
+  /**
+   * 建立一次引用并等首批历史。**成功时把 `live` 记下来**。
+   *
+   * @param id - 要恢复的会话。
+   * @param signal - 取消信号。
+   * @returns 接好的会话。
+   */
+  private async retainOnce(id: string, signal?: AbortSignal): Promise<AgentSession> {
     const reference = this.deps.retain(id, { source: RETAIN_SOURCE, signal })
     try {
       const binding = await reference.ready
       // `await` 之后可能已被取消：不建立引用就别留一份悬挂的订阅。
-      if (signal?.aborted) throw new Error('attach aborted')
+      if (signal?.aborted) throw abortedError()
       this.live = new LiveSession(id, reference, binding)
       return this.live
     } catch (error) {
-      // ready 失败也要把引用还回去，否则这条路径就是泄漏。
+      // 失败也要把引用还回去，否则这条路径就是泄漏。
       reference.release()
-      // **被取消不算会话失效**：切面板、换账号都会 abort，此时 id 仍然有效，
-      // 忘掉它等于每次切面板都新开一个会话——对话就这么丢的。
-      // 只有"非取消"的失败才可能是会话真的不在了（被归档、DSH 换过数据目录）。
-      if (signal?.aborted !== true) this.forget()
       throw error
     }
+  }
+
+  /**
+   * 打开会话，**最多两次 retain**：先恢复存储里的 id，若它在宿主里已不存在，
+   * 清掉它并新建一次。
+   *
+   * 为什么要重建而不是只清理：DSH 只把用过的会话落盘（查证见 session-error.ts），
+   * 一个创建后从未成功发过消息的会话，宿主重启后就不在 `session.list()` 里了。
+   * 只清理会让浮窗永久停在"连接失败"。
+   *
+   * 为什么只重建一次：第二次还失败就说明不是"这个 id 没了"这么简单，继续试只会
+   * 在每次挂载产生一个新会话。**失败要如实报出来，不能靠下次挂载掩盖。**
+   *
+   * 账号身份在开头捕获、清理前与写回前各校验一次：一次 `open()` 可能在账号切换后
+   * 才收尾，那时绝不能动新账号的槽位。
+   */
+  private async open(signal?: AbortSignal): Promise<AgentSession> {
+    const keyAtStart = this.accountKey()
+    const id = await this.ensure()
+    if (signal?.aborted) throw abortedError()
+    try {
+      return await this.retainOnce(id, signal)
+    } catch (error) {
+      if (!isUnknownSession(error)) throw error
+      // 会话确实不在了。但只有账号没变时才有资格动存储。
+      if (this.accountKey() !== keyAtStart) throw error
+      clearSessionIdIfMatches(this.accountOf(), id)
+      this.id = null
+      // 取消已经发生：清掉死 id 就够了，**不要**再建一个——组件都卸载了。
+      if (signal?.aborted) throw error
+      if (this.accountKey() !== keyAtStart) throw error
+      const fresh = await this.ensure()
+      if (signal?.aborted) throw error
+      return this.retainOnce(fresh, signal)
+    }
+  }
+
+  /** 当前账号分区键；未确认时为 `null`。**不用 membershipId 单独判断**。 */
+  private accountKey(): string | null {
+    const state = this.accountOf()
+    if (state.kind !== 'confirmed') return null
+    return `${state.account.membershipType}:${state.account.membershipId}`
   }
 
   /** 释放引用并退订；会话 id 保留。 */
