@@ -13,7 +13,8 @@ const user = (seq: number) => ({ type: 'event', event: { type: 'user/message', s
 // 真实形状（探针实证）：chunk 是 type 驱动的；文本块用 text-delta。
 const chunk = (attemptId: string, text: string) => ({
   type: 'transient',
-  data: { attemptId, chunk: { type: 'text-delta', index: 1, text } },
+  // 探针实证的真实形状：载荷在 event 下。
+  event: { type: 'assistant/live-chunk', data: { attemptId, chunk: { type: 'text-delta', index: 1, text } } },
 })
 const replace = (entries: unknown[], hasMore = false) =>
   ({ entries, hasMore, revision: 1, change: { kind: 'replace', entries } }) as never
@@ -208,5 +209,45 @@ describe('状态类事件不是消息', () => {
     )
     expect(c.snapshot().lines.map((l) => l.kind)).toEqual(['tool', 'tool'])
     expect(c.snapshot().lines.map((l) => l.key)).toEqual(['e7', 'e8'])
+  })
+})
+
+describe('流式载荷的层级', () => {
+  it('reads the payload from event.data, not entry.data', () => {
+    // 探针原样：{ type:'transient', event:{ type:'assistant/live-chunk', data:{ attemptId, chunk } } }
+    const c = new Conversation()
+    c.accept(
+      append([
+        {
+          type: 'transient',
+          event: {
+            type: 'assistant/live-chunk',
+            seq: 3,
+            data: { attemptId: 'a1', chunk: { type: 'text-delta', index: 1, text: '你' } },
+          },
+        },
+        {
+          type: 'transient',
+          event: {
+            type: 'assistant/live-chunk',
+            seq: 4,
+            data: { attemptId: 'a1', chunk: { type: 'text-delta', index: 1, text: '好' } },
+          },
+        },
+      ]) as never,
+    )
+    // Injectable violation: 读 entry.data 会拿到 undefined，流式永远是空的。
+    expect(c.snapshot().streaming).toEqual({ attemptId: 'a1', text: '你好' })
+  })
+
+  it('still accepts a top-level data payload', () => {
+    // 顶层形状留给未来可能的变化，不该因为收紧层级就丢掉。
+    const c = new Conversation()
+    c.accept(
+      append([
+        { type: 'transient', data: { attemptId: 'a2', chunk: { type: 'text-delta', index: 1, text: '甲' } } },
+      ]) as never,
+    )
+    expect(c.snapshot().streaming).toEqual({ attemptId: 'a2', text: '甲' })
   })
 })

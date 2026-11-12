@@ -9,6 +9,7 @@
  */
 
 import { clearSessionId, readSessionId, saveSessionId } from './session-store'
+import type { AccountState } from './session-store'
 
 /** 引用来源。**这是越过类型闸门的唯一一处**，理由见 `RETAIN_SOURCE`。 */
 type Source = 'controllerOperation' | 'gateway'
@@ -65,6 +66,8 @@ export class SessionAdapter {
   constructor(
     private readonly deps: SessionDeps,
     private readonly options: { workspaceId?: string; agentPreset?: string } = {},
+    /** 当前账号状态；**只有 `confirmed` 才允许读写会话存储**。 */
+    private readonly account: AccountState = { kind: 'unavailable' },
   ) {}
 
   /** 当前会话 id；没创建过就是 `null`。 */
@@ -80,7 +83,7 @@ export class SessionAdapter {
   async ensure(): Promise<string> {
     if (this.id !== null) return this.id
     // 上次用过的就复用：换面板、刷新页面都会重建组件，id 不存就等于每次都开新会话。
-    const stored = readSessionId()
+    const stored = readSessionId(this.account)
     if (stored !== null) {
       this.id = stored
       return stored
@@ -89,7 +92,7 @@ export class SessionAdapter {
       .create({ workspaceId: this.options.workspaceId, agentPreset: this.options.agentPreset })
       .then((id) => {
         this.id = id
-        saveSessionId(id)
+        saveSessionId(this.account, id)
         return id
       })
       .finally(() => {
@@ -106,7 +109,7 @@ export class SessionAdapter {
    */
   forget(): void {
     this.id = null
-    clearSessionId()
+    clearSessionId(this.account)
   }
 
   private pending: Promise<string> | null = null

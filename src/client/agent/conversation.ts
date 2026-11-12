@@ -45,7 +45,20 @@ export interface ConversationState {
 /** 条目：定型事件或流式块。 */
 interface Entry {
   readonly type: 'event' | 'transient'
-  readonly event?: { readonly type?: string; readonly seq?: number }
+  /**
+   * **载荷在 `event` 下面，不在条目顶层。**
+   *
+   * 探针实证（A8.4，2026-11-12）：transient 条目的真实形状是
+   * `{ type: 'transient', event: { type: 'assistant/live-chunk', seq, data: { attemptId, turn, step, chunk } } }`。
+   * 早先读 `entry.data` 是错的层级——`attemptId` 永远是空串，于是每一条都被跳过，
+   * 流式从未被消费过。
+   */
+  readonly event?: {
+    readonly type?: string
+    readonly seq?: number
+    readonly data?: { readonly attemptId?: string; readonly chunk?: unknown }
+  }
+  /** 顶层 `data` 只出现在 `event` 条目上，保留它是为了不丢信息。 */
   readonly data?: { readonly attemptId?: string; readonly chunk?: unknown }
 }
 
@@ -194,10 +207,12 @@ export class Conversation {
     for (const raw of entries) {
       const entry = raw as Entry
       if (entry?.type !== 'transient') continue
-      const attemptId = entry.data?.attemptId ?? ''
+      // 载荷在 `event` 下（探针实证）；顶层 `data` 留作兼容，但实际走前者。
+      const payload = entry.event?.data ?? entry.data
+      const attemptId = payload?.attemptId ?? ''
       if (attemptId === '') continue
       if (this.settled.has(attemptId) || this.cancelled.has(attemptId)) continue
-      const text = chunkText(entry.data?.chunk)
+      const text = chunkText(payload?.chunk)
       const current = this.state.streaming
       // 换了 attempt 就开新的一条：上一轮的文本不能并进这一轮。
       const base = current !== null && current.attemptId === attemptId ? current.text : ''

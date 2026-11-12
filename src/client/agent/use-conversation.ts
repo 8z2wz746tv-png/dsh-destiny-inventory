@@ -8,8 +8,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Conversation } from './conversation'
 import { SessionAdapter } from './session-adapter'
 import { sendOutcome } from './send-result'
-import { fetchContext } from '../api'
+import { fetchAccount, fetchContext } from '../api'
 import { withContext } from './context-prompt'
+import { accountStateOf } from './account-state'
+import type { AccountState } from './session-store'
 import type { ViewContextLike } from './context-prompt'
 import type { AgentSession, SessionDeps } from './session-adapter'
 import type { ConversationState } from './conversation'
@@ -43,12 +45,21 @@ export function useConversation(
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<ViewContextLike | null>(null)
   const session = useRef<AgentSession | null>(null)
+  // 账号状态先落定，再建 adapter：会话存储的键由它决定，晚一步就用了错的键。
+  const [account, setAccount] = useState<AccountState>({ kind: 'unavailable' })
+  useEffect(() => {
+    if (routePath === '') return
+    const controller = new AbortController()
+    fetchAccount(routePath, controller.signal)
+      .then((value) => setAccount(accountStateOf({ ok: true, account: value as never })))
+      .catch(() => setAccount(accountStateOf({ ok: false })))
+    return () => controller.abort()
+  }, [routePath])
+
   const adapter = useMemo(
-    // **不传 agentPreset**。`~/.dsh/.agent-presets/` 那几份是 `dsh-agents` 插件的
-    // 格式（Cordis 组合，`preset.yml` 里没有 `id`），不是核心 registry 的条目；
-    // 传 `'destiny'` 会被 `agent-preset/not-found` 拒掉。真实的 id 待查。
-    () => (deps === null ? null : new SessionAdapter(deps)),
-    [deps],
+    // **不传 agentPreset**：`destiny` 尚未在 registry 注册，传了会被 `not-found` 拒。
+    () => (deps === null ? null : new SessionAdapter(deps, {}, account)),
+    [deps, account],
   )
 
   useEffect(() => {
