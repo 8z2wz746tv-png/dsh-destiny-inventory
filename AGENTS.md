@@ -211,6 +211,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/host/make-room.ts` | 满了就腾一件进仓库再继续。**绝不腾**穿着/锁定/不可转移/本次要放的/已在仓库的；判据照 MCP 的 ADR-029。只搬一趟，仓库满就如实失败。 |
 | `src/host/item-state-route.ts` | 单件位置。**从强制刷新的 profile 读**——`.../Item/{id}/` 从不回 characterId。 |
 | `src/host/journal-record.ts` | 一次写入 → 一条 journal 记录（含 `from`/`to` 映射）。 |
+| `src/host/journal-identity.ts` | journal 条目的稳定身份 `(at, instanceId)`。**尚未接入**：类型已定，调用方还没改（同毫秒不同物品会被当成同一条）。 |
 | `src/host/context-store.ts` | 面板当前视图 + 200 条 journal，落盘 jsonl，**启动时读回**（否则重启一次"刚才那件"就没了）。给 agent 读，不给 agent 写。 |
 | `src/host/detect-external.ts` | **观测到的**外部变更：位置差异先进候选，扛过同步窗口（实测 56–64 秒，取 90）才记事件，来源只写 `external`，不推断是谁。基线只在稳定时前进。 |
 | `src/host/agent-tools.ts` | 两个只读工具 `destiny_workspace_*`：回答"这件""刚刚"。只读是设计，不是还没做。 |
@@ -296,7 +297,8 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 
 ### 接手 / 动手前
 
-- `docs/HANDOFF.md` — **换会话先读这份**：现状、这轮的决定与理由、真机踩过的坑、待办（带优先级）。
+- `docs/HANDOFF.md` — **换会话先读这份**：现状、这轮的决定与理由、真机踩过的坑、待办（带优先级）。**注意它停在 v0.48.0，不含 A2–A8。**
+- `docs/AGENT-SHELL-STATUS.md` — **碰随航浮窗之前必读**：A2–A8 哪些真能用、哪些是假的、`retain` 与 `session.list` 的初始化竞态、DSH 侧已确认的 Session 语义。
 - `docs/CODING-STANDARDS.md` — 要把本仓的编码规范搬到另一个仓库时看它；**本仓仍以 `AGENTS.md` 为准**，冲突时以那份为准。
 - `AGENTS.md` — 本文件。规矩、分层、代码地图、唯一出处表。
 - `README.md` — 装与用：怎么构建、怎么装进 DSH、热更怎么用；也有一份按「我要干什么」排的入口表。

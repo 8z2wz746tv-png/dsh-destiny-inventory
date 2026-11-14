@@ -36,6 +36,7 @@ pnpm typecheck
 | 我要… | 读这份 |
 |---|---|
 | **接手这个项目**（新会话、换人） | [`docs/HANDOFF.md`](docs/HANDOFF.md) — 现状、决定与理由、真机踩过的坑、待办 |
+| **碰随航浮窗 / Agent** | [`docs/AGENT-SHELL-STATUS.md`](docs/AGENT-SHELL-STATUS.md) — A2–A8 哪些真能用、已知缺陷、DSH 的 Session 语义 |
 | 改代码之前知道规矩 | [`AGENTS.md`](AGENTS.md) — 分层、唯一出处、守门测试、提交格式 |
 | 知道**哪个文件管什么** | [`AGENTS.md`](AGENTS.md) §9 代码地图（65 个文件，一句一句职责） |
 | 理解**为什么长成这样** | [`docs/plans/PLAN-SELF-HOSTED-DIM.md`](docs/plans/PLAN-SELF-HOSTED-DIM.md) — 架构契约，§1 的边界写死 |
