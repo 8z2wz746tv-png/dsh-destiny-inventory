@@ -11,6 +11,7 @@ import { quickActions } from './quick-actions'
 import type { Bubble } from './message-view'
 import { useConversation } from './use-conversation'
 import type { SessionDeps } from './session-adapter'
+import type { BaselineTrustSource } from './baseline-trust'
 
 /** 一个工具气泡：名字、状态、参数与结果折叠。 */
 function ToolBubble({ bubble }: { bubble: Bubble }): ReactElement {
@@ -35,12 +36,14 @@ function ToolBubble({ bubble }: { bubble: Bubble }): ReactElement {
 export function DockChat({
   sessions,
   routePath = '',
+  trust,
 }: {
   sessions: SessionDeps | null
   routePath?: string
+  trust?: BaselineTrustSource
 }): ReactElement {
   const [draft, setDraft] = useState('')
-  const { state, phase, error, send, view, blocker, retry } = useConversation(sessions, true, routePath)
+  const { state, phase, error, send, view, blocker, retry } = useConversation(sessions, true, routePath, trust)
   const bubbles = bubblesOf(state)
   const logRef = useRef<HTMLDivElement>(null)
 

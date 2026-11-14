@@ -223,6 +223,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 |---|---|
 | `src/client/agent/dock-position.ts` | 悬浮窗位置：`clampDock` / `refit` / 存取。**纯函数**，保证窗口永远完整可见。 |
 | `src/client/agent/account-state.ts` | `/account` 结果 → 账号三态（确证/不可用/未登录）。**失败不是未登录**，这决定会话能不能恢复。 |
+| `src/client/agent/baseline-trust.ts` | **页面级基线信任**：首次 `pending → ready` 授予 `initial`，任何 generation 变化撤销且不再恢复；订阅随 plugin dispose 释放。只读 phase 与 generation，不是第二套 Session 管理器。 |
 | `src/client/agent/session-store.ts` | 会话 id 的持久化（localStorage）。**换面板、刷新都靠它不失忆**；失效时读到就清。 |
 | `src/client/agent/session-error.ts` | 认出「会话在宿主里已不存在」。**DSH 无错误码**，只能按 message 前缀判；用 `startsWith` 不用 `includes`。 |
 | `src/client/agent/session-adapter.ts` | 会话接线（A3）：`create` / `retain` / `ready` / `eventSource` / `prompt` / `release`。**被取消≠会话失效**：abort 保留 id 但必须归还引用。**不认识 React**。 |

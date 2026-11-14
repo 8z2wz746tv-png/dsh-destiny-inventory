@@ -14,6 +14,7 @@ import { accountStateOf } from './account-state'
 import type { AccountState } from './session-store'
 import type { ViewContextLike } from './context-prompt'
 import type { AgentSession, SessionDeps } from './session-adapter'
+import type { BaselineTrustSource } from './baseline-trust'
 import type { ConversationState } from './conversation'
 
 /** 发送的三个阶段，界面据此禁用按钮与显示错误。 */
@@ -44,6 +45,7 @@ export function useConversation(
   deps: SessionDeps | null,
   enabled: boolean,
   routePath = '',
+  trust?: BaselineTrustSource,
 ): ConversationApi {
   const conversation = useMemo(() => new Conversation(), [])
   const [state, setState] = useState<ConversationState>(conversation.snapshot())
@@ -92,8 +94,11 @@ export function useConversation(
 
   const adapter = useMemo(
     // **不传 agentPreset**：`destiny` 尚未在 registry 注册，传了会被 `not-found` 拒。
-    () => (deps === null || accountKey === null ? null : new SessionAdapter(deps, {}, () => accountRef.current)),
-    [deps, accountKey],
+    () =>
+      deps === null || accountKey === null
+        ? null
+        : new SessionAdapter(deps, trust === undefined ? {} : { trust }, () => accountRef.current),
+    [deps, accountKey, trust],
   )
 
   useEffect(() => {

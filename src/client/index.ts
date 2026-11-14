@@ -4,6 +4,8 @@ import { InventoryPanel } from './InventoryPanel'
 import type { ClientSlotSeam } from './slots'
 import { ensureStyles } from './styles'
 import { DockWindow } from './agent/DockWindow'
+import { BaselineTrustTracker } from './agent/baseline-trust'
+import type { BaselineGenerationSource } from './agent/baseline-trust'
 import type { SessionDeps } from './agent/session-adapter'
 import { ensureDockStyles } from './agent/styles-dock'
 
@@ -30,7 +32,7 @@ const DEFAULT_ROUTE_PATH = '/dsh-destiny-inventory'
 
 // Static array: cordis rejects a function form, and a missing entry fails at
 // activation with "cannot get property ... without inject" (guide §7.3).
-export const inject = ['slots', 'sessions']
+export const inject = ['slots', 'sessions', 'connection']
 
 /**
  * Register the sidebar row and the page.
@@ -38,10 +40,21 @@ export const inject = ['slots', 'sessions']
  */
 export function apply(ctx: Context): void {
   const slots = (ctx as unknown as { slots: ClientSlotSeam }).slots
+  const sessions = (ctx as unknown as { sessions: SessionDeps }).sessions
+  const connection = (ctx as unknown as { connection?: { generation: BaselineGenerationSource } }).connection
   const routePath = DEFAULT_ROUTE_PATH
   const disposers: (() => void)[] = []
+
+  // **页面级**，必须在账号门控之前建立：账号是异步的，等它回来时首次
+  // pending → ready 可能已经过去了。缺了公开面就 fail-closed（adapter 不允许清理）。
+  const trust =
+    sessions.list === undefined || connection?.generation === undefined
+      ? undefined
+      : new BaselineTrustTracker({ list: sessions.list, generation: connection.generation })
+
   disposers.push(ensureStyles())
   disposers.push(ensureDockStyles())
+  if (trust !== undefined) disposers.push(() => trust.dispose())
   disposers.push(
     slots.inject('sidebar.panellist', () =>
       slots.register(
@@ -67,7 +80,6 @@ export function apply(ctx: Context): void {
       ),
     ),
   )
-  // 临时探针 3：只在 ?probe=3 时出现。
   disposers.push(
     // 悬浮窗：order 1100 越过 dsh-plugin-session-panes 的 1000，避免被它压住。
     slots.inject('shell.overlay', () =>
@@ -76,7 +88,7 @@ export function apply(ctx: Context): void {
           name: 'shell.overlay',
           id: 'destiny-dock',
           order: 1100,
-          inject: () => ({ sessions: (ctx as unknown as { sessions: SessionDeps }).sessions, routePath }),
+          inject: () => ({ sessions, routePath, trust }),
         },
         DockWindow,
       ),

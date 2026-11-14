@@ -147,8 +147,22 @@ describe('适配器', () => {
         // 只有"会话在宿主里不存在"才清；网络错误不清（详见 session-recovery.test.ts）。
         retain: () => ({ sessionId: 'session-gone', binding: {} as never, ready: Promise.reject(new Error('sessions.retain: unknown session session-gone')), release: () => {} }),
         retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 0 }) }),
+        refresh: async () => {},
+        // 成功基线里没有 session-gone：这才是允许清理的证据。
+        list: {
+          getSnapshot: () => ({ phase: 'ready' as const, byId: {} }),
+          subscribe: () => () => {},
+        },
       } as never,
-      {},
+      {
+        trust: {
+          snapshot: () => ({
+            trust: { kind: 'initial' as const, generation: 1 },
+            generation: 1,
+          }),
+          subscribe: () => () => {},
+        },
+      },
       () => A,
     )
     await expect(adapter.attach()).rejects.toThrow()

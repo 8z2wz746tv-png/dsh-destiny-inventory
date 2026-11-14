@@ -11,13 +11,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const binding = (overrides: Record<string, unknown> = {}) => ({
   sessionId: 's1',
-  session: { async prompt() { return { ok: true } } },
+  session: {
+    async prompt() { return { ok: true } },
+    getSnapshot: () => ({ openState: 'open' }),
+  },
   eventSource: {
     getSnapshot: () => ({ entries: [], hasMore: false, revision: 1, change: { kind: 'replace', entries: [] } }),
     subscribe: () => () => {},
   },
   ...overrides,
 })
+
+/** 屏障只需要“已经建立过成功基线”；这里的用例都不恢复已存 id。 */
+const readyList = {
+  getSnapshot: () => ({ phase: 'ready' as const, byId: {} }),
+  subscribe: () => () => {},
+}
 
 beforeEach(() => {
   vi.resetModules()
@@ -44,6 +53,8 @@ describe('attach 中途 abort', () => {
           return { sessionId: 's1', binding: binding() as never, ready, release: () => { released += 1 } }
         },
         retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 0 }) }),
+        refresh: async () => {},
+        list: readyList,
       } as never,
     )
 
@@ -71,6 +82,8 @@ describe('attach 中途 abort', () => {
         async create() { return 's2' },
         retain: () => ({ sessionId: 's2', binding: binding() as never, ready: Promise.resolve(binding()), release: () => { released += 1 } }),
         retainInfo: () => ({ getSnapshot: () => ({ referenceCount: 1 }) }),
+        refresh: async () => {},
+        list: readyList,
       } as never,
     )
     const live = await adapter.attach()

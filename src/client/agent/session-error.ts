@@ -39,6 +39,87 @@ export function isUnknownSession(error: unknown): boolean {
 }
 
 /**
+ * 列表还没建立过成功基线。
+ *
+ * `unknown session` 只有在**成功基线确认它不在列表里**之后才说明会话没了；
+ * 基线之前抛出的同一条错误说明不了任何事。两者用不同错误分开，
+ * 免得调用方把"加载中"当成"失效"。
+ */
+export class ListNotReadyError extends Error {
+  /** 触发这条错误的原始值，便于排查；不参与判据。 */
+  readonly reason: unknown
+
+  constructor(reason: unknown) {
+    super(`会话列表尚未就绪：${String(reason)}`)
+    this.name = 'ListNotReadyError'
+    this.reason = reason
+  }
+}
+
+/**
+ * `retain` 成功、引用也 ready 了，但历史没有打开。
+ *
+ * DSH 的 `doOpen` 把 RemoteFailure 吞成 `openState === 'error'`，promise 照样决议。
+ * 不看这一眼，attach 会"成功"而整段历史是空的——那只是把 unknown session
+ * 换成了另一种静默丢失。
+ */
+export class HistoryNotOpenError extends Error {
+  readonly openState: string
+
+  constructor(openState: string, detail?: unknown) {
+    super(
+      `会话历史没有打开（openState=${openState}）${
+        detail === undefined ? '' : `：${String(detail)}`
+      }`,
+    )
+    this.name = 'HistoryNotOpenError'
+    this.openState = openState
+  }
+}
+
+/**
+ * 列表与 `retain` 对同一个 id 的判断冲突。
+ *
+ * 这不是“会话没了”：成功基线说它在，`retain` 却说不认识。两边必有一边看到的是
+ * 旧状态。**保留原 id**，不清理、不新建；重试一次通常就能对齐。
+ */
+export class SessionIdentityConflictError extends Error {
+  readonly sessionId: string
+  /** 原始 unknown 错误，便于排查；不参与判据。 */
+  readonly reason: unknown
+
+  constructor(sessionId: string, reason: unknown) {
+    super(`会话身份不一致（${sessionId}）：列表说它在，retain 却说不认识。原 id 已保留，可重试。`)
+    this.name = 'SessionIdentityConflictError'
+    this.sessionId = sessionId
+    this.reason = reason
+  }
+}
+
+/**
+ * 列表基线不可验证，因此**不允许**清掉原会话 id。
+ *
+ * 触发它的不是“列表还没到”，而是“列表可能来自旧 generation”：
+ * 首次 pending → ready 之外的 ready 基线没有可证明的当前代次。保留 id，
+ * 让用户刷新页面重新获得一次授权，比误删一个实际存在的会话便宜得多。
+ */
+export class BaselineUnverifiedError extends Error {
+  readonly sessionId: string
+
+  constructor(sessionId: string, trust: string) {
+    const reason =
+      trust === 'revoked'
+        ? '重连后旧列表不再可信'
+        : trust === 'initial'
+          ? '授权的连接代次与当前不一致'
+          : '没有观察到首次成功基线'
+    super(`会话列表基线未验证：${reason}。已保留原会话 ${sessionId}；刷新页面可重试自动恢复。`)
+    this.name = 'BaselineUnverifiedError'
+    this.sessionId = sessionId
+  }
+}
+
+/**
  * 我们自己抛的取消错误；用来把「用户取消」与「会话失效」分开。
  * 两者可以同时成立，**判据不能互相替代**。
  */
