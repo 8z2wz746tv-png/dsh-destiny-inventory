@@ -4,8 +4,12 @@
 
 > 通用骨架见 `docs/CODING-STANDARDS.md`。两者冲突时以本文件为准（这里含项目落点）。
 
-> **当前冻结点（2026-11-10）**：`feat/consistency-p1` @ `f598c02`，326 测试绿（1 skipped），
-> `master` 未合并、未打包。
+> **当前冻结点（2026-11-14）**：`feat/consistency-p1` @ `a326ec6`（PR #1 合并），
+> 非 live 551 passed / 1 skipped；`master` 未合并、未打包。
+>
+> **当前产品阶段（2026-11-14）**：武器分析卡片代码阶段完成；当前版本真机闭环待
+> Bungie Token 恢复后验收。live 5 个失败是凭证过期，不是源码回归；详见
+> `docs/plans/PLAN-WEAPON-LOOP.md` §9。
 >
 > **P1.5 跨刷新恢复已冻结**。设计、三个缺口与两条已验证边界全在
 > `docs/plans/PLAN-P15-RECOVERY.md` §七点六 / §七点七——**不要把缺口写成已解决**。
@@ -320,7 +324,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 - `docs/plans/PLAN-LOCAL-CACHE.md` — **动前端加载/缓存之前看它**：实测上游 0.6–15 秒、DIM 靠缓存不等、加一层 IndexedDB 的取舍与验收。设计稿，未实施。
 - `docs/plans/PLAN-AGENT-SHELL.md` — **做随航 Agent 之前看它**：A1 查到的真实 Session API、`source` 只有两个值的硬约束、四个边界的落点。
 - `docs/plans/PLAN-AGENT-VIEW.md` — **改 Agent 事实来源之前看它**：为什么不能把 Agent 绑到 ItemRow、三栏怎么分开传、effective 为什么不进契约。设计稿，未实施。
-- `docs/plans/PLAN-WEAPON-LOOP.md` — **第一版产品闭环**：选中武器 → `/context` → `weapon_assistant` → 结构化卡 → 点击副本定位。范围、卡片模型、locate 总线、验收与截断回退。已实施（2026-11-14）。
+- `docs/plans/PLAN-WEAPON-LOOP.md` — **第一版产品闭环**：选中武器 → `/context` → `weapon_assistant` → 结构化卡 → 点击副本定位。范围、卡片模型、locate 总线、截断回退。代码阶段已实施；当前版本真机待验收（§9）。
 - `docs/plans/PLAN-STATE-AUTHORITY.md` — **下一个主题的协议**：六种状态来源各能证明什么、四个消费者现在实际读什么、`effective` 为什么不许当事实读。设计稿，未实施。
 - `docs/plans/PLAN-P15-RECOVERY.md` — **做 F5 后的操作恢复之前看它**：`ok` ≠ `verified`、恢复意图而非重放写、三个设计问题的答案。设计稿，未实施。
 - `docs/plans/PLAN-AGENT-CONTEXT.md` — 动 agent 层（工具、journal、`/context`）之前看它：P3 的规格与被砍掉的自动摘要。
