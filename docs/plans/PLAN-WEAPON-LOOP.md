@@ -1,6 +1,6 @@
 # 武器分析 → 卡片 → 定位（第一版产品闭环）
 
-2026-11-14，基线 `9d794f4`。**代码阶段已完成并合入 `feat/consistency-p1`（PR #1，merge `a326ec6`）；当前版本的真机闭环待 Bungie Token 恢复后复验。**
+2026-11-14，基线 `9d794f4`。**代码阶段已完成并合入 `feat/consistency-p1`（PR #1，merge `a326ec6`）；真机核心闭环通过。** 限制：数据过期 / `not-in-snapshot` 仍只有单测覆盖，未做破坏性真机模拟；完整 `analyze` 受宿主结果大小截断，卡片走 `filter_rolls` 副本卡。
 
 ## 0. 一句话
 
@@ -292,15 +292,23 @@ export function locateItem(instanceId: string): LocateResult
 - 卡片上的每个字段都能指回 `weapon_assistant` 响应里的真实路径；没有的字段不画。
 - `tsc` 干净、非 live 全量测试绿、live 凭证恢复后真机六步通过。
 
-> **当前状态（2026-11-14 19:57）**：代码/测试完成；当前版本真机六步**未**复验
-> （token 过期，live 5 个失败）。下面 token 有效时的真机记录是历史证据，不是本次合并版本的复验。
+> **当前状态（2026-11-14）**：真机核心闭环通过。快照 `1924 / 1924`；analyze 参数正确；
+> analyze 49933 字节被宿主截断后真实调用 `filter_rolls`；卡片 4 个副本；卡片
+> `instanceId 6917529431004309171` 与最终高亮 tile 的 `data-instance-id` 完全一致；
+> 面板关闭后定位失败且无 UI 副作用。数据过期 / `not-in-snapshot` 仍只有单测，
+> 没有为了造异常去修改真实库存。
 
 ## 9. 实施记录与已知限制（2026-11-14）
 
-**当前状态（2026-11-14 19:57）**：代码审查通过，PR #1 已合入 `feat/consistency-p1`
-（merge `a326ec6`）。Bungie token 仍过期（-14594s），live 5 个失败、3 个通过；
-当前版本真机闭环**待验收**。下面 2026-11-14 早些时候的真机记录是 token 有效时的
-历史证据，不是本次合并版本的复验。
+**当前状态（2026-11-14）**：代码审查通过，PR #1 已合入 `feat/consistency-p1`
+（merge `a326ec6`），真机**核心闭环通过**。Token 过期不是 Bungie 服务故障：
+`FileTokenProvider` 只读，MCP 才刷新；一次只读 `player_assistant` 调用把 token 文件
+从 15:54 到期刷新到 21:25 到期，live 测试 8/8 通过。真机证据：面板 1924/1924；
+analyze 参数 `intent=analyze, weapon_name=命运终结者（失时）, include_inventory=true`；
+analyze 结果 49933 字节被截断后真实调用 `filter_rolls`；卡片 4 个副本；卡片副本
+`instanceId 6917529431004309171` 与 `.dsh-destiny-tile.is-located` 的
+`data-instance-id` 完全一致；关闭面板后定位失败且无高亮/筛选副作用。
+数据过期 / `not-in-snapshot` 仍由单测覆盖，未做破坏性真机模拟。
 
 **字段路径核对（2026-11-14 审查修复）**：真实 `analyze` fixture 里 `gear_tier` 位于
 `data.inventory.instances[].weapon.gear_tier`，`weapon.instance` 只有实例字段
