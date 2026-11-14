@@ -10,30 +10,11 @@ import { bubblesOf } from './message-view'
 import { quickActions } from './quick-actions'
 import { isWeaponAssistant, parseWeaponCard } from './weapon-card-model'
 import { WeaponCard } from './WeaponCard'
+import { cardIntentOf, toolRefusalOf } from './tool-card'
 import type { Bubble } from './message-view'
 import { useConversation } from './use-conversation'
 import type { SessionDeps } from './session-adapter'
 import type { BaselineTrustSource } from './baseline-trust'
-
-/** 这次调用是不是卡片关心的 intent；`weapon_assistant` 默认 intent 是 analyze。 */
-function isCardIntent(args: string): boolean {
-  try {
-    const value = JSON.parse(args) as { intent?: unknown }
-    const intent = typeof value.intent === 'string' ? value.intent : 'analyze'
-    return intent === 'analyze' || intent === 'filter_rolls'
-  } catch {
-    return false
-  }
-}
-
-/** 工具明确返回 ok:false 是可读的错误，不是“解析失败”；原始结果里已经写清原因。 */
-function isToolRefusal(result: string): boolean {
-  try {
-    return (JSON.parse(result) as { ok?: unknown }).ok === false
-  } catch {
-    return false
-  }
-}
 
 /** 一个工具气泡：名字、状态、参数与结果折叠；武器分析结果渲染成卡片。 */
 function ToolBubble({
@@ -57,8 +38,8 @@ function ToolBubble({
     tool.status === 'done' &&
     tool.result !== null &&
     model === null &&
-    isCardIntent(tool.args) &&
-    !isToolRefusal(tool.result)
+    cardIntentOf(tool.args) &&
+    !toolRefusalOf(tool.result)
   return (
     <div className={`inventory-dock__tool is-${tool.status}`}>
       <div className="inventory-dock__tool-head">

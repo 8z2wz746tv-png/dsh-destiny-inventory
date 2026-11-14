@@ -129,6 +129,7 @@ function parseCopy(value: unknown): WeaponCardCopy | null {
     power: numberOf(instance.power),
     equipped: instance.is_equipped === true,
     locked: instance.locked === true,
+    // 真实 analyze 响应把 gear_tier 放在 weapon 顶层；weapon.instance 没有这个字段。
     gearTier: Object.prototype.hasOwnProperty.call(weapon, 'gear_tier')
       ? numberOf(weapon.gear_tier)
       : undefined,

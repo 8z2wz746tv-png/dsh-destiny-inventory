@@ -91,7 +91,8 @@ data.weapon           身份块 + farming/popularity/community/sources + name_va
 data.stats[]          {stat_hash,name,value,display,is_primary,display_as_numeric}
 data.sockets[]        定义级插槽：kind/slot/option_count/options[].name/can_roll/recommended
 data.inventory.weapon.owned   {count,status}
-data.inventory.instances[]   副本：weapon.instance.{instance_id,location,power,is_equipped,locked,god_roll_score,gear_tier,item_level}
+data.inventory.instances[]   副本：weapon.instance.{instance_id,location,power,is_equipped,locked,god_roll_score}
+                              + weapon.gear_tier（真实 analyze 响应；instance 下没有这个字段）
                               sockets[].equipped.{plug_hash,name}（当前装着的）
                               stats[]
 data.inventory_status "complete" / 其他
@@ -292,6 +293,13 @@ export function locateItem(instanceId: string): LocateResult
 - `tsc` 干净、全量测试绿、真机六步通过。
 
 ## 9. 实施记录与已知限制（2026-11-14）
+
+**字段路径核对（2026-11-14 审查修复）**：真实 `analyze` fixture 里 `gear_tier` 位于
+`data.inventory.instances[].weapon.gear_tier`，`weapon.instance` 只有实例字段
+（`instance_id/location/power/is_equipped/locked/god_roll_score`）。本文件 §4 早先把它写进了
+`weapon.instance`，是**文档**错误；代码一直读 `weapon.gear_tier`，改到 `instance` 会让
+T2/T5 变成 `undefined`。现已修正文档，并在测试里同时断言原始 fixture 路径和解析结果，
+避免文档、实现、测试一起写错。
 
 真机第一次点「分析武器」时发现：DSH 会把过大的工具结果截成“头 + 尾 + Omitted … bytes”，
 真实武器的 `analyze` 响应约 96–122KB，浏览器拿到的 JSON 不完整，解析必然失败。

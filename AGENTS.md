@@ -237,6 +237,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/DockChat.tsx` | 悬浮窗里的对话界面：气泡、流式、工具行、错误、输入框。只读 Controller。 |
 | `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
 | `src/client/agent/weapon-card-model.ts` | `weapon_assistant` 结果 → 卡片模型：支持 `analyze` 与紧凑 `filter_rolls`；只读真实字段，解析失败/结构异常返回 `null`，UI 回退原始文本。 |
+| `src/client/agent/tool-card.ts` | 卡片 intent / `ok:false` 的纯判定：缺省 analyze、compare/info 排除、非法 JSON 不误报；从 DockChat 抽出以便边界测试。 |
 | `src/client/agent/WeaponCard.tsx` | 武器分析卡（工具气泡内）：身份、属性、当前 perk、持有副本、愿单/刷取参考、警告；副本点击走定位总线。 |
 | `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |
 | `src/client/index.ts` | 客户端入口：把面板注册进宿主槽位。 |

@@ -42,6 +42,22 @@ describe('真实响应', () => {
     expect(model?.owned).toHaveLength(5)
   })
 
+  it('reads gearTier from weapon.gear_tier, not from instance', () => {
+    const raw = JSON.parse(FIXTURE) as Record<string, any>
+    const instances = raw.data.inventory.instances
+    // 真实 analyze fixture：gear_tier 在 weapon 顶层，instance 下没有。
+    expect(instances[1].weapon.gear_tier).toBe(2)
+    expect(instances[1].weapon.instance.gear_tier).toBeUndefined()
+    expect(instances[2].weapon.gear_tier).toBe(5)
+    expect(instances[2].weapon.instance.gear_tier).toBeUndefined()
+    expect(instances[0].weapon.gear_tier).toBeNull()
+    expect(instances[0].weapon.instance.gear_tier).toBeUndefined()
+    // 解析结果必须与真实路径一致；改去读 instance 会让这里变成 undefined。
+    expect(model?.owned[1].gearTier).toBe(2)
+    expect(model?.owned[2].gearTier).toBe(5)
+    expect(model?.owned[0].gearTier).toBeNull()
+  })
+
   it('keeps the exact instance ids, not names or hashes', () => {
     expect(model?.owned.map((copy) => copy.instanceId)).toEqual([
       '6917530086191827487',
