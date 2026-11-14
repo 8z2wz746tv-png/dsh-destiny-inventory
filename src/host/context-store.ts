@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path'
 /** Where the user is looking. */
 export interface SelectedItemState {
   instanceId: string; hash: number; name: string; observed: string; observedAt: number
+  kind?: 'weapon' | 'armor' | 'other' // 领域类型；旧上下文没有它也照常工作，只加 kind。
   pending?: { target: string; submittedAt: number; status: string }; rollback?: { location: string }
 }
 

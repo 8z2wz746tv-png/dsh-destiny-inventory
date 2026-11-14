@@ -85,6 +85,12 @@ const DOCK_STYLES = `
 .inventory-dock__tool-name { font-weight: 600; opacity: .9; }
 .inventory-dock__tool-status { opacity: .6; }
 .inventory-dock__tool.is-pending .inventory-dock__tool-status { color: #f0d98a; }
+.inventory-dock__tool-unparsed {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #e6a0a0;
+}
 .inventory-dock__tool-result {
   margin: 6px 0 0;
   max-height: 90px;
@@ -128,6 +134,100 @@ const DOCK_STYLES = `
   cursor: pointer;
 }
 .inventory-dock__send:disabled { opacity: .4; cursor: default; }
+
+/* 武器分析卡：只读模型，不承载解析逻辑。 */
+.inventory-dock__weapon-card {
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .22);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.inventory-dock__weapon-head { display: flex; gap: 9px; align-items: center; }
+.inventory-dock__weapon-icon {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 3px;
+  background: #1a2026;
+  border: 1px solid rgba(255, 255, 255, .18);
+  flex: none;
+}
+.inventory-dock__weapon-icon.is-empty { display: block; }
+.inventory-dock__weapon-identity { min-width: 0; display: grid; gap: 1px; }
+.inventory-dock__weapon-kicker,
+.inventory-dock__weapon-frame,
+.inventory-dock__weapon-en { font-size: 9px; opacity: .68; }
+.inventory-dock__weapon-en { font-family: ui-monospace, Consolas, monospace; opacity: .55; overflow-wrap: anywhere; }
+.inventory-dock__weapon-name { font-size: 14px; line-height: 1.2; overflow-wrap: anywhere; }
+.inventory-dock__weapon-source-tag {
+  justify-self: start;
+  border: 1px solid rgba(232, 197, 107, .35);
+  border-radius: 999px;
+  padding: 0 5px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #e8c56b;
+}
+.inventory-dock__weapon-source-tag.is-analyze { border-color: rgba(255, 255, 255, .18); color: #b9c0c6; }
+.inventory-dock__weapon-scope-note { margin: 0; font-size: 9px; line-height: 1.5; color: #e6c791; }
+.inventory-dock__weapon-summary { margin: 0; font-size: 10px; opacity: .78; }
+.inventory-dock__weapon-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; }
+.inventory-dock__weapon-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.inventory-dock__weapon-stat span { opacity: .7; }
+.inventory-dock__weapon-stat strong { font-variant-numeric: tabular-nums; }
+.inventory-dock__weapon-section { display: grid; gap: 4px; }
+.inventory-dock__weapon-section h4 { margin: 0; font-size: 10px; color: #c4c9cd; font-weight: 600; }
+.inventory-dock__weapon-perks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.inventory-dock__weapon-perks li { display: flex; gap: 6px; font-size: 10px; }
+.inventory-dock__weapon-perks li span { opacity: .6; min-width: 42px; }
+.inventory-dock__weapon-muted { margin: 0; font-size: 10px; opacity: .6; }
+.inventory-dock__weapon-copy {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .03);
+  color: inherit;
+  font: inherit;
+  padding: 5px 6px;
+  cursor: pointer;
+}
+.inventory-dock__weapon-copy:hover { background: rgba(255, 255, 255, .08); }
+.inventory-dock__weapon-copy.is-selected { border-color: rgba(232, 197, 107, .55); }
+.inventory-dock__weapon-copy-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; font-size: 10px; }
+.inventory-dock__weapon-copy-line em { font-style: normal; font-size: 9px; opacity: .7; }
+.inventory-dock__weapon-copy-perks { font-size: 9px; opacity: .72; overflow-wrap: anywhere; }
+.inventory-dock__weapon-copy-score { font-size: 9px; opacity: .55; }
+.inventory-dock__weapon-error { margin: 0; color: #e6a0a0; font-size: 10px; }
+.inventory-dock__weapon-ok { margin: 0; color: #9fd6a8; font-size: 10px; }
+.inventory-dock__weapon-hints { display: grid; gap: 3px; font-size: 9px; }
+.inventory-dock__weapon-hints > div { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 6px; }
+.inventory-dock__weapon-hints span:first-child { opacity: .6; }
+.inventory-dock__weapon-hints span:last-child { overflow-wrap: anywhere; }
+.inventory-dock__weapon-ref { margin: 0; font-size: 9px; opacity: .8; }
+.inventory-dock__weapon-source { opacity: .6; }
+.inventory-dock__weapon-warnings {
+  border-top: 1px solid rgba(230, 199, 145, .2);
+  padding-top: 5px;
+  color: #e6c791;
+  font-size: 9px;
+}
+.inventory-dock__weapon-warnings strong { font-size: 10px; }
+.inventory-dock__weapon-warnings ul { margin: 3px 0 0; padding-left: 16px; }
 `
 
 /**

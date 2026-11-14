@@ -19,6 +19,8 @@ export interface ReportedView {
     name: string
     observed: string
     observedAt: number
+    /** 领域类型；只加 kind，旧上下文没有它也照常工作。 */
+    kind?: 'weapon' | 'armor' | 'other'
     pending?: { target: string; submittedAt: number; status: string }
     rollback?: { location: string }
   } | null

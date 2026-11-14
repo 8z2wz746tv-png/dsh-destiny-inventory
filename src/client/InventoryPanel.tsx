@@ -16,6 +16,7 @@ import { PendingOps } from './pending-ops'
 import { loadInventory } from './load-inventory'
 import { Receipts } from './Receipts'
 import { useSearchIndex } from './use-search-index'
+import { useLocate } from './use-locate'
 import { useViewReport } from './use-view-report'
 import { viewOf } from './view-reporter'
 import { useReceipts } from './use-receipts'
@@ -244,9 +245,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
         character: characterByLocation.get(location),
       }))
   }, [items, characterByLocation])
-
-  const patch = (next: Partial<InventoryFilters>): void => setFilters((current) => ({ ...current, ...next }))
-
+  const { locate, patch } = useLocate(items, setFilters, setLayout, panelRef)
   const onCellDrop = (event: DragEvent<HTMLDivElement>, cell: StoreCell): void => {
     event.preventDefault()
     setDropTarget(null)
@@ -256,7 +255,6 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
     if (item === null || item === undefined) return
     actions.move(item, cell.location)
   }
-
   /** One tile; shared by the flat list and the segmented vault. */
   const renderTile = (item: ItemRow): ReactElement => (
     <ItemTile
@@ -264,6 +262,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
       item={item}
       compact={item.inventoryBucketHash === 375726501}
       overlays={overlays}
+      located={locate?.instanceId === item.instanceId}
       onOpen={hoverCard.show}
       onDragStart={setDragging}
       onDragEnd={() => setDragging(null)}
@@ -298,6 +297,7 @@ export function InventoryPanel({ routePath }: { routePath: string }): ReactEleme
             item={cell.equipped}
             compact={shelf?.id === 'engrams'}
             overlays={overlays}
+            located={locate?.instanceId === cell.equipped.instanceId}
             onOpen={hoverCard.show}
             onDragStart={setDragging}
             onDragEnd={() => {

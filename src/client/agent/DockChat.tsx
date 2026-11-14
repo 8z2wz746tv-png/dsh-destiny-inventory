@@ -4,30 +4,61 @@
  * **只读 Controller 的状态**：气泡由 `bubblesOf` 摊出来，这里不解析任何事件，
  * 也不自己记消息。它拿到的每一样东西都能在 `Conversation` 的快照里找到。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { bubblesOf } from './message-view'
 import { quickActions } from './quick-actions'
+import { isWeaponAssistant, parseWeaponCard } from './weapon-card-model'
+import { WeaponCard } from './WeaponCard'
+import { cardIntentOf, toolRefusalOf } from './tool-card'
 import type { Bubble } from './message-view'
 import { useConversation } from './use-conversation'
 import type { SessionDeps } from './session-adapter'
 import type { BaselineTrustSource } from './baseline-trust'
 
-/** 一个工具气泡：名字、状态、参数与结果折叠。 */
-function ToolBubble({ bubble }: { bubble: Bubble }): ReactElement {
+/** 一个工具气泡：名字、状态、参数与结果折叠；武器分析结果渲染成卡片。 */
+function ToolBubble({
+  bubble,
+  selectedInstanceId,
+}: {
+  bubble: Bubble
+  selectedInstanceId?: string
+}): ReactElement {
   const tool = bubble.tool
+  // 只解析**这一个气泡自己的** result；callId 已在 tool-pairs 里配对，不共享“最近一次”。
+  const model = useMemo(() => {
+    if (tool === undefined || tool.status !== 'done' || tool.result === null) return null
+    if (!isWeaponAssistant(tool.name)) return null
+    return parseWeaponCard(tool.result)
+  }, [tool?.name, tool?.status, tool?.result])
   if (tool === undefined) return <span />
   const label = tool.status === 'pending' ? '等待结果…' : tool.status === 'failed' ? '失败' : '完成'
+  const unparsedWeapon =
+    isWeaponAssistant(tool.name) &&
+    tool.status === 'done' &&
+    tool.result !== null &&
+    model === null &&
+    cardIntentOf(tool.args) &&
+    !toolRefusalOf(tool.result)
   return (
     <div className={`inventory-dock__tool is-${tool.status}`}>
       <div className="inventory-dock__tool-head">
         <span className="inventory-dock__tool-name">{tool.name === '' ? '工具' : tool.name}</span>
         <span className="inventory-dock__tool-status">{label}</span>
       </div>
-      {tool.result !== null && (
-        <pre className="inventory-dock__tool-result" onPointerDown={(event) => event.stopPropagation()}>
-          {tool.result.slice(0, 400)}
-        </pre>
+      {unparsedWeapon && (
+        <p className="inventory-dock__tool-unparsed">
+          武器卡片结果无法完整解析，未生成卡片（可能被宿主截断或格式异常）。
+        </p>
+      )}
+      {model !== null ? (
+        <WeaponCard model={model} selectedInstanceId={selectedInstanceId} />
+      ) : (
+        tool.result !== null && (
+          <pre className="inventory-dock__tool-result" onPointerDown={(event) => event.stopPropagation()}>
+            {tool.result.slice(0, 400)}
+          </pre>
+        )
       )}
     </div>
   )
@@ -68,7 +99,11 @@ export function DockChat({
         )}
         {bubbles.map((bubble) =>
           bubble.role === 'tool' ? (
-            <ToolBubble key={bubble.key} bubble={bubble} />
+            <ToolBubble
+              key={bubble.key}
+              bubble={bubble}
+              selectedInstanceId={view?.selected?.instanceId}
+            />
           ) : (
             <div key={bubble.key} className={`inventory-dock__bubble is-${bubble.role}`}>
               {bubble.text}

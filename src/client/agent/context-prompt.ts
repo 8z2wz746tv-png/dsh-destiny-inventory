@@ -13,6 +13,10 @@ export interface ViewContextLike {
   character?: string
   filters?: { search?: string; category?: string; lock?: string; sort?: string }
   selected?: {
+    /** 实例 id；已由 host 上报，卡片用它标出“你选中的副本”。 */
+    instanceId?: string
+    /** 领域类型；本轮只加这一个字段，旧上下文没有它也照常工作。 */
+    kind?: 'weapon' | 'armor' | 'other'
     name?: string
     observed?: string
     pending?: { target?: string; status?: string }
