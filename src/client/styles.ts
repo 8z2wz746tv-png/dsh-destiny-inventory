@@ -257,6 +257,15 @@ const CSS = `
   cursor: grab;
 }
 .dsh-destiny-tile:hover { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: -2px; }
+.dsh-destiny-tile.is-located {
+  outline: 2px solid #f5d47a;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px rgba(245, 212, 122, .35), 0 0 14px rgba(245, 212, 122, .55);
+  animation: dsh-locate-pulse .6s ease-in-out 3;
+}
+@keyframes dsh-locate-pulse {
+  50% { box-shadow: 0 0 0 3px rgba(245, 212, 122, .55), 0 0 22px rgba(245, 212, 122, .75); }
+}
 .dsh-destiny-tile:active { cursor: grabbing; }
 /* The engram shelf: five slots across, two rows, 52px a slot.
    Every length is fixed on purpose — flex-basis alone let the grid's content

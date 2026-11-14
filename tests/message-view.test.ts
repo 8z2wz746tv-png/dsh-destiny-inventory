@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { bubblesOf } from '../src/client/agent/message-view'
+import { parseWeaponCard } from '../src/client/agent/weapon-card-model'
 import type { ConversationState } from '../src/client/agent/conversation'
 
 const state = (lines: unknown[], streaming: ConversationState['streaming'] = null): ConversationState =>
@@ -160,5 +161,35 @@ describe('注入的 user 消息', () => {
       textMsg(2, 'assistant/message', '好的'),
     ]
     expect(bubblesOf(state(lines)).map((b) => b.role)).toEqual(['tool', 'assistant'])
+  })
+})
+
+
+describe('两次武器工具调用的归属', () => {
+  it('keeps each result on its own callId, not on array order', () => {
+    const analyze = JSON.stringify({ ok: true, data: { weapon: { name: '甲' } } })
+    const filter = JSON.stringify({
+      ok: true,
+      data: {
+        scope: 'owned_inventory',
+        coverage_complete: true,
+        matched: [{ instance_id: 'i1', name: '乙', location: 'Vault', power: 10, perks: ['p'] }],
+      },
+    })
+    const lines = [
+      { key: 'e1', kind: 'tool', raw: { type: 'tool/call', seq: 1, data: { callId: 'a', name: 'mcp__destiny__weapon_assistant', arguments: '{}' } } },
+      { key: 'e2', kind: 'tool', raw: { type: 'tool/call', seq: 2, data: { callId: 'b', name: 'mcp__destiny__weapon_assistant', arguments: '{}' } } },
+      // 结果故意反序到达：按 callId 配，不按“最近一次”或数组位置。
+      { key: 'e3', kind: 'tool', raw: { type: 'tool/result', seq: 3, data: { message: { toolCallId: 'b', content: [{ type: 'text', text: filter }], isError: false } } } },
+      { key: 'e4', kind: 'tool', raw: { type: 'tool/result', seq: 4, data: { message: { toolCallId: 'a', content: [{ type: 'text', text: analyze }], isError: false } } } },
+    ]
+    const tools = bubblesOf(state(lines)).flatMap((bubble) => (bubble.tool === undefined ? [] : [bubble.tool]))
+    const byCall = new Map(tools.map((tool) => [tool.callId, tool]))
+    expect(byCall.get('a')?.result).toBe(analyze)
+    expect(byCall.get('b')?.result).toBe(filter)
+    expect(parseWeaponCard(byCall.get('a')?.result ?? null)?.source).toBe('analyze')
+    expect(parseWeaponCard(byCall.get('a')?.result ?? null)?.name).toBe('甲')
+    expect(parseWeaponCard(byCall.get('b')?.result ?? null)?.source).toBe('filter_rolls')
+    expect(parseWeaponCard(byCall.get('b')?.result ?? null)?.name).toBe('乙')
   })
 })

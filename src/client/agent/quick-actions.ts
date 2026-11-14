@@ -19,7 +19,8 @@ export interface QuickAction {
  * @returns 最多四个按钮，按相关度排。
  */
 export function quickActions(view: ViewContextLike | null): QuickAction[] {
-  const name = view?.selected?.name ?? ''
+  const selected = view?.selected ?? null
+  const name = selected?.name ?? ''
   if (name === '') {
     return [
       { id: 'weekly', label: '本周有什么', prompt: '本周的轮换、夜幕和商人有什么值得拿的？' },
@@ -27,11 +28,21 @@ export function quickActions(view: ViewContextLike | null): QuickAction[] {
       { id: 'loadout', label: '术士配装', prompt: '我这套术士现在什么状态？有什么能改的？' },
     ]
   }
-  // 只知道名字，不知道类型——让模型自己判断，别在按钮上猜错。
+
+  // 本版只做武器分析：选中武器才给入口；平替/配装按钮这一轮不出现。
+  if (selected?.kind === 'weapon') {
+    return [
+      {
+        id: 'analyze',
+        label: '分析武器',
+        prompt: `用 weapon_assistant（intent="analyze", weapon_name="${name}", include_inventory=true）分析这把武器。如果 analyze 结果无法完整解析（例如被宿主截断、出现 Omitted、JSON 不完整或格式异常），再调用 weapon_assistant（intent="filter_rolls", weapon_name="${name}", include_inventory=true）取当前持有副本；按真实结果展示，不要用 bash 猜，也不要补 stats/定义池/愿单。`,
+      },
+    ]
+  }
+
+  // 选中的不是武器：不给武器分析入口，保留两条不依赖选中物的浏览问题。
   return [
-    { id: 'analyze', label: '分析这件', prompt: `帮我看看「${name}」怎么样，值不值得留。` },
-    { id: 'build', label: '适合什么配装', prompt: `「${name}」适合什么配装？` },
-    { id: 'swap', label: '找平替', prompt: `「${name}」有没有同类里更好的？` },
+    { id: 'weekly', label: '本周有什么', prompt: '本周的轮换、夜幕和商人有什么值得拿的？' },
     { id: 'vault', label: '仓库里能清什么', prompt: '看看我的仓库，哪些可以拆或可以留着用？' },
   ]
 }

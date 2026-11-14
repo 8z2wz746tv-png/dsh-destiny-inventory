@@ -37,6 +37,7 @@ export function viewOf(
     selection === undefined
       ? null
       : itemStateView(selection.observed, selection.observedAt, selection.operation, selection.picked)
+  const kind = selection?.picked.kind
   return {
     character,
     filters: {
@@ -45,7 +46,10 @@ export function viewOf(
       lock: filters.lock,
       sort: filters.sort,
     },
-    selected: state === null ? null : { ...state, hash: selection?.picked.hash ?? 0 },
+    selected:
+      state === null
+        ? null
+        : { ...state, hash: selection?.picked.hash ?? 0, ...(kind === undefined ? {} : { kind }) },
     lastDropTarget: dropTarget,
   }
 }

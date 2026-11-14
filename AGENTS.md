@@ -236,9 +236,13 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/use-conversation.ts` | 会话的 React 接线：attach、喂事件、交出发送结果。**账号确认是 attach 的前置条件**：`account=null`（还在查）时不建 adapter。 |
 | `src/client/agent/DockChat.tsx` | 悬浮窗里的对话界面：气泡、流式、工具行、错误、输入框。只读 Controller。 |
 | `src/client/agent/DockWindow.tsx` | 悬浮窗壳子（A2）：拖动、两态、位置持久化。**不碰任何 Session API**。 |
+| `src/client/agent/weapon-card-model.ts` | `weapon_assistant` 结果 → 卡片模型：支持 `analyze` 与紧凑 `filter_rolls`；只读真实字段，解析失败/结构异常返回 `null`，UI 回退原始文本。 |
+| `src/client/agent/WeaponCard.tsx` | 武器分析卡（工具气泡内）：身份、属性、当前 perk、持有副本、愿单/刷取参考、警告；副本点击走定位总线。 |
 | `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |
 | `src/client/index.ts` | 客户端入口：把面板注册进宿主槽位。 |
 | `src/client/InventoryPanel.tsx` | 面板主体：状态、拖拽、行渲染。**贴着 450 上限**，新逻辑往 hook 里放。 |
+| `src/client/locate-bus.ts` | 浮窗 → 面板的定位命令：按 **instanceId** 精确查找；面板没开/不在快照时返回明确失败。不碰 Journal/State Authority。 |
+| `src/client/use-locate.ts` | 面板侧定位接线：注册 handler、清必要筛选、切宽、滚动、2.5s 高亮；不动职业/排序/其它状态。 |
 | `src/client/use-item-actions.ts` | 动作编排：`move`/`equip`/`lock` 进队列、回执、失败回读。面板只调它。 |
 | `src/client/write-queue.ts` | 客户端写队列：串行、同物品未启动的 move 被替换、可取消。**纯逻辑，不碰 React**。 |
 | `src/client/journal-reduce.ts` | journal 的**折叠**（不是去重）：同一操作的两行（原始 + resolution）合成一条，保留最终态。**纯逻辑**。 |
@@ -315,6 +319,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 - `docs/plans/PLAN-LOCAL-CACHE.md` — **动前端加载/缓存之前看它**：实测上游 0.6–15 秒、DIM 靠缓存不等、加一层 IndexedDB 的取舍与验收。设计稿，未实施。
 - `docs/plans/PLAN-AGENT-SHELL.md` — **做随航 Agent 之前看它**：A1 查到的真实 Session API、`source` 只有两个值的硬约束、四个边界的落点。
 - `docs/plans/PLAN-AGENT-VIEW.md` — **改 Agent 事实来源之前看它**：为什么不能把 Agent 绑到 ItemRow、三栏怎么分开传、effective 为什么不进契约。设计稿，未实施。
+- `docs/plans/PLAN-WEAPON-LOOP.md` — **第一版产品闭环**：选中武器 → `/context` → `weapon_assistant` → 结构化卡 → 点击副本定位。范围、卡片模型、locate 总线、验收与截断回退。已实施（2026-11-14）。
 - `docs/plans/PLAN-STATE-AUTHORITY.md` — **下一个主题的协议**：六种状态来源各能证明什么、四个消费者现在实际读什么、`effective` 为什么不许当事实读。设计稿，未实施。
 - `docs/plans/PLAN-P15-RECOVERY.md` — **做 F5 后的操作恢复之前看它**：`ok` ≠ `verified`、恢复意图而非重放写、三个设计问题的答案。设计稿，未实施。
 - `docs/plans/PLAN-AGENT-CONTEXT.md` — 动 agent 层（工具、journal、`/context`）之前看它：P3 的规格与被砍掉的自动摘要。

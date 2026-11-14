@@ -22,12 +22,15 @@ export function ItemTile({
   item,
   compact = false,
   overlays,
+  located = false,
   onOpen,
   onDragStart,
   onDragEnd,
 }: {
   /** Engram shelves draw small round icons, one row per bucket. */
   compact?: boolean;
+  /** 定位命令落在这件上：滚动后短暂高亮。 */
+  located?: boolean;
   item: ItemRow
   /** The game's badge artwork, handed down with the snapshot. */
   overlays?: { crafted: string; craftedBackground: string; tiers: string[] }
@@ -53,9 +56,11 @@ export function ItemTile({
         'r-' + item.rarity,
         item.masterwork && 'is-masterwork',
         compact && 'is-compact',
+        located && 'is-located',
         item.pending !== undefined && 'is-' + item.pending,
       )}
       title={tooltip}
+      data-instance-id={item.instanceId}
       data-locked={item.locked ? '1' : '0'}
       data-equipped={item.equipped}
       draggable
