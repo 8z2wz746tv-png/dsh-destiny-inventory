@@ -36,9 +36,20 @@ describe('选中的是武器', () => {
     expect(analyze?.prompt).toContain('filter_rolls')
   })
 
-  it('offers only the analysis entry in this version', () => {
+  it('offers analysis and alternatives, nothing else', () => {
     const actions = quickActions({ selected: { name: '命运终结者', kind: 'weapon' } })
-    expect(actions.map((a) => a.id)).toEqual(['analyze'])
+    expect(actions.map((a) => a.id)).toEqual(['analyze', 'alternatives'])
+  })
+
+  it('names the type query, cap and current-hash exclusion in the alternatives prompt', () => {
+    const actions = quickActions({ selected: { name: '命运终结者', kind: 'weapon' } })
+    const alternatives = actions.find((a) => a.id === 'alternatives')
+    expect(alternatives?.label).toBe('找平替')
+    expect(alternatives?.prompt).toContain('filter_rolls')
+    expect(alternatives?.prompt).toContain('weapon_type')
+    expect(alternatives?.prompt).toContain('limit=20')
+    expect(alternatives?.prompt).toContain('item_hash')
+    expect(alternatives?.prompt).toContain('同类型候选')
   })
 })
 

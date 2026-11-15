@@ -33,10 +33,17 @@ export function viewOf(
     | undefined,
   dropTarget: string | null,
 ): ReportedView {
+  // 观测行和 clicked 行必须是同一个实例；否则 instanceId 和 hash 会来自不同的行。
+  const observed =
+    selection !== undefined &&
+    selection.observed !== undefined &&
+    selection.observed.instanceId === selection.picked.instanceId
+      ? selection.observed
+      : undefined
   const state =
     selection === undefined
       ? null
-      : itemStateView(selection.observed, selection.observedAt, selection.operation, selection.picked)
+      : itemStateView(observed, selection.observedAt, selection.operation, selection.picked)
   const kind = selection?.picked.kind
   return {
     character,

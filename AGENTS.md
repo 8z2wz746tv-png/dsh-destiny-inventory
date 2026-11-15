@@ -7,9 +7,12 @@
 > **当前冻结点（2026-11-14）**：`feat/consistency-p1` @ `a326ec6`（PR #1 合并），
 > 非 live 551 passed / 1 skipped；`master` 未合并、未打包。
 >
-> **当前产品阶段（2026-11-14）**：武器分析卡片真机核心闭环通过。限制：数据过期 /
-> `not-in-snapshot` 仍只有单测，未做破坏性真机模拟；完整 analyze 受宿主结果大小截断，
-> 卡片走 `filter_rolls` 副本卡。详见 `docs/plans/PLAN-WEAPON-LOOP.md` §9。
+> **当前产品阶段（2026-11-15）**：武器分析卡片真机核心闭环通过；武器平替（同类型持有候选）
+> v4 代码审查通过，并进入 `feat/consistency-p1` 的合并流程。**真实 DSH 的 pending→切武器→
+> 原结果→Hash 排除→精确定位闭环尚未验证，是独立待办**；host live 8/8 不能当成产品闭环。
+> 限制：候选卡不给 stats/理由/场景（Agent 回复），20/126 实例按 10 组截断；数据过期 /
+> `not-in-snapshot` 仍只有单测。详见 `docs/plans/PLAN-WEAPON-LOOP.md` §9 与
+> `PLAN-WEAPON-ALTERNATIVES.md` §9。
 >
 > **P1.5 跨刷新恢复已冻结**。设计、三个缺口与两条已验证边界全在
 > `docs/plans/PLAN-P15-RECOVERY.md` §七点六 / §七点七——**不要把缺口写成已解决**。
@@ -243,6 +246,9 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 | `src/client/agent/weapon-card-model.ts` | `weapon_assistant` 结果 → 卡片模型：支持 `analyze` 与紧凑 `filter_rolls`；只读真实字段，解析失败/结构异常返回 `null`，UI 回退原始文本。 |
 | `src/client/agent/tool-card.ts` | 卡片 intent / `ok:false` 的纯判定：缺省 analyze、compare/info 排除、非法 JSON 不误报；从 DockChat 抽出以便边界测试。 |
 | `src/client/agent/WeaponCard.tsx` | 武器分析卡（工具气泡内）：身份、属性、当前 perk、持有副本、愿单/刷取参考、警告；副本点击走定位总线。 |
+| `src/client/agent/tool-context.ts` | 候选查询的调用时上下文：纯绑定函数按 `sessionId + bubble.key` 冻结 hash/instance/kind/observedAt；只在 `DockChat` 提交后的 layout effect 里写 state，render 不写 Map；首次看到已完成则拒绝绑定。 |
+| `src/client/agent/weapon-alternatives-model.ts` | `filter_rolls(weapon_type=…)` → 同类型持有候选：按 `selectedItemHash` 排除当前组、按 `item_hash` 分组、保留截断/社区事实；Hash 缺失拒绝出卡。 |
+| `src/client/agent/WeaponAlternativesCard.tsx` | 同类型候选卡：候选身份、持有副本、当前插槽、社区清单记录；不做理由/评分/排名；副本点击走定位总线。 |
 | `src/client/agent/styles-dock.ts` | 悬浮窗样式 + 自己的 style 生命周期（独立 id，不与面板共用）。 |
 | `src/client/index.ts` | 客户端入口：把面板注册进宿主槽位。 |
 | `src/client/InventoryPanel.tsx` | 面板主体：状态、拖拽、行渲染。**贴着 450 上限**，新逻辑往 hook 里放。 |
@@ -325,6 +331,7 @@ agent 的能力走 `ctx.tools`（`host/agent-tools.ts`），与浏览器的数�
 - `docs/plans/PLAN-AGENT-SHELL.md` — **做随航 Agent 之前看它**：A1 查到的真实 Session API、`source` 只有两个值的硬约束、四个边界的落点。
 - `docs/plans/PLAN-AGENT-VIEW.md` — **改 Agent 事实来源之前看它**：为什么不能把 Agent 绑到 ItemRow、三栏怎么分开传、effective 为什么不进契约。设计稿，未实施。
 - `docs/plans/PLAN-WEAPON-LOOP.md` — **第一版产品闭环**：选中武器 → `/context` → `weapon_assistant` → 结构化卡 → 点击副本定位。范围、卡片模型、locate 总线、截断回退。真机核心闭环通过；数据过期边界仅单测（§9）。
+- `docs/plans/PLAN-WEAPON-ALTERNATIVES.md` — **武器平替第一版**：`filter_rolls` 持有候选、当前武器识别、候选卡、Agent 回答理由/差异/场景、复用 locate。v4 代码审查通过；真实 DSH 竞态闭环待独立验收（§9）。
 - `docs/plans/PLAN-STATE-AUTHORITY.md` — **下一个主题的协议**：六种状态来源各能证明什么、四个消费者现在实际读什么、`effective` 为什么不许当事实读。设计稿，未实施。
 - `docs/plans/PLAN-P15-RECOVERY.md` — **做 F5 后的操作恢复之前看它**：`ok` ≠ `verified`、恢复意图而非重放写、三个设计问题的答案。设计稿，未实施。
 - `docs/plans/PLAN-AGENT-CONTEXT.md` — 动 agent 层（工具、journal、`/context`）之前看它：P3 的规格与被砍掉的自动摘要。

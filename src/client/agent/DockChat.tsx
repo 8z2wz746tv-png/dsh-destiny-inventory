@@ -4,13 +4,17 @@
  * **只读 Controller 的状态**：气泡由 `bubblesOf` 摊出来，这里不解析任何事件，
  * 也不自己记消息。它拿到的每一样东西都能在 `Conversation` 的快照里找到。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { bubblesOf } from './message-view'
 import { quickActions } from './quick-actions'
 import { isWeaponAssistant, parseWeaponCard } from './weapon-card-model'
 import { WeaponCard } from './WeaponCard'
 import { cardIntentOf, toolRefusalOf } from './tool-card'
+import { isAlternativesQuery, parseWeaponAlternatives } from './weapon-alternatives-model'
+import { bindNewToolContexts, contextKey } from './tool-context'
+import type { ToolContextSnapshot } from './tool-context'
+import { WeaponAlternativesCard } from './WeaponAlternativesCard'
 import type { Bubble } from './message-view'
 import { useConversation } from './use-conversation'
 import type { SessionDeps } from './session-adapter'
@@ -20,26 +24,59 @@ import type { BaselineTrustSource } from './baseline-trust'
 function ToolBubble({
   bubble,
   selectedInstanceId,
+  alternativesContext,
 }: {
   bubble: Bubble
   selectedInstanceId?: string
+  alternativesContext?: ToolContextSnapshot
 }): ReactElement {
   const tool = bubble.tool
+  const alternativesQuery = tool !== undefined && isAlternativesQuery(tool.args)
+  // 上下文在 DockChat 里按调用 key 冻结，这里只读；结果返回后切装备不改绑。
+  const snapshot = alternativesContext
   // 只解析**这一个气泡自己的** result；callId 已在 tool-pairs 里配对，不共享“最近一次”。
+  const alternatives = useMemo(() => {
+    if (tool === undefined || tool.status !== 'done' || tool.result === null) return null
+    if (!isWeaponAssistant(tool.name) || !isAlternativesQuery(tool.args)) return null
+    if (snapshot === undefined || snapshot.kind !== 'weapon' || snapshot.stale) return null
+    return parseWeaponAlternatives(tool.result, {
+      instanceId: snapshot.instanceId,
+      hash: snapshot.hash,
+      name: snapshot.name,
+    })
+  }, [tool?.name, tool?.status, tool?.result, tool?.args, snapshot])
   const model = useMemo(() => {
     if (tool === undefined || tool.status !== 'done' || tool.result === null) return null
-    if (!isWeaponAssistant(tool.name)) return null
+    if (!isWeaponAssistant(tool.name) || isAlternativesQuery(tool.args)) return null
     return parseWeaponCard(tool.result)
-  }, [tool?.name, tool?.status, tool?.result])
+  }, [tool?.name, tool?.status, tool?.result, tool?.args])
   if (tool === undefined) return <span />
   const label = tool.status === 'pending' ? '等待结果…' : tool.status === 'failed' ? '失败' : '完成'
   const unparsedWeapon =
+    !alternativesQuery &&
     isWeaponAssistant(tool.name) &&
     tool.status === 'done' &&
     tool.result !== null &&
     model === null &&
     cardIntentOf(tool.args) &&
     !toolRefusalOf(tool.result)
+  const contextMissing =
+    alternativesQuery && tool.status === 'done' && snapshot === undefined
+  const notWeapon =
+    alternativesQuery && tool.status === 'done' && snapshot !== undefined && snapshot.kind !== 'weapon'
+  const staleContext =
+    alternativesQuery && tool.status === 'done' && snapshot !== undefined && snapshot.stale
+  const unparsedAlternatives =
+    alternativesQuery &&
+    tool.status === 'done' &&
+    tool.result !== null &&
+    alternatives === null &&
+    !toolRefusalOf(tool.result) &&
+    !contextMissing &&
+    !notWeapon &&
+    !staleContext
+  const unknownCurrent =
+    alternativesQuery && tool.status === 'done' && alternatives !== null && !alternatives.currentKnown
   return (
     <div className={`inventory-dock__tool is-${tool.status}`}>
       <div className="inventory-dock__tool-head">
@@ -51,7 +88,34 @@ function ToolBubble({
           武器卡片结果无法完整解析，未生成卡片（可能被宿主截断或格式异常）。
         </p>
       )}
-      {model !== null ? (
+      {contextMissing && (
+        <p className="inventory-dock__tool-unparsed">
+          未捕获到工具调用时的上下文，未生成候选卡；请重新选中武器后再试。
+        </p>
+      )}
+      {notWeapon && (
+        <p className="inventory-dock__tool-unparsed">
+          当前选中项不是武器（或类型未知），未生成候选卡。
+        </p>
+      )}
+      {staleContext && (
+        <p className="inventory-dock__tool-unparsed">
+          上下文已过期（超过 5 分钟），未生成候选卡；请重新选中武器后再试。
+        </p>
+      )}
+      {unknownCurrent && (
+        <p className="inventory-dock__tool-unparsed">
+          当前武器身份无法确认（缺少 selectedItemHash），不能排除同定义副本；未生成候选卡。
+        </p>
+      )}
+      {unparsedAlternatives && (
+        <p className="inventory-dock__tool-unparsed">
+          候选结果无法完整解析，未生成候选卡（可能被宿主截断或格式异常）。
+        </p>
+      )}
+      {alternatives !== null && alternatives.currentKnown ? (
+        <WeaponAlternativesCard model={alternatives} />
+      ) : model !== null ? (
         <WeaponCard model={model} selectedInstanceId={selectedInstanceId} />
       ) : (
         tool.result !== null && (
@@ -74,8 +138,16 @@ export function DockChat({
   trust?: BaselineTrustSource
 }): ReactElement {
   const [draft, setDraft] = useState('')
-  const { state, phase, error, send, view, blocker, retry } = useConversation(sessions, true, routePath, trust)
+  const { state, phase, error, send, view, blocker, retry, sessionId } = useConversation(sessions, true, routePath, trust)
   const bubbles = bubblesOf(state)
+  const contextScope = sessionId ?? 'no-session'
+  // render 只读；提交后的 layout effect 才写绑定，避免被放弃的 render 留下错误快照。
+  const [alternativesContexts, setAlternativesContexts] = useState<
+    ReadonlyMap<string, ToolContextSnapshot>
+  >(() => new Map())
+  useLayoutEffect(() => {
+    setAlternativesContexts((bound) => bindNewToolContexts(bubbles, view, bound, contextScope))
+  }, [bubbles, view, contextScope])
   const logRef = useRef<HTMLDivElement>(null)
 
   // 新消息或流式增量到达时贴到底。没有这一步，回复会一直待在视野外面——
@@ -103,6 +175,7 @@ export function DockChat({
               key={bubble.key}
               bubble={bubble}
               selectedInstanceId={view?.selected?.instanceId}
+              alternativesContext={alternativesContexts.get(contextKey(contextScope, bubble.key))}
             />
           ) : (
             <div key={bubble.key} className={`inventory-dock__bubble is-${bubble.role}`}>

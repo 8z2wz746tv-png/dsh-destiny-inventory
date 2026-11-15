@@ -228,6 +228,73 @@ const DOCK_STYLES = `
 }
 .inventory-dock__weapon-warnings strong { font-size: 10px; }
 .inventory-dock__weapon-warnings ul { margin: 3px 0 0; padding-left: 16px; }
+
+/* 同类型持有候选：只放事实，不放理由/评分/排名。 */
+.inventory-dock__alt-card {
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .22);
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.inventory-dock__alt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.inventory-dock__alt-head h4 { margin: 0; font-size: 11px; color: #e8eaed; }
+.inventory-dock__alt-source { display: block; font-size: 9px; opacity: .55; }
+.inventory-dock__alt-count { flex: none; font-size: 9px; opacity: .65; }
+.inventory-dock__alt-current { margin: 0; font-size: 10px; }
+.inventory-dock__alt-current-detail { display: grid; gap: 1px; font-size: 9px; opacity: .72; }
+.inventory-dock__alt-note { margin: 0; color: #e6c791; font-size: 9px; }
+.inventory-dock__alt-muted { margin: 0; font-size: 9px; opacity: .62; }
+.inventory-dock__alt-list { display: grid; gap: 7px; }
+.inventory-dock__alt-candidate {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, .09);
+  padding-top: 6px;
+}
+.inventory-dock__alt-candidate:first-child { border-top: 0; padding-top: 0; }
+.inventory-dock__alt-candidate-head { display: flex; align-items: center; gap: 7px; }
+.inventory-dock__alt-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 3px;
+  background: #1a2026;
+  border: 1px solid rgba(255, 255, 255, .16);
+  flex: none;
+}
+.inventory-dock__alt-icon.is-empty { display: block; }
+.inventory-dock__alt-identity { min-width: 0; display: grid; gap: 1px; }
+.inventory-dock__alt-identity strong { font-size: 12px; overflow-wrap: anywhere; }
+.inventory-dock__alt-identity span { font-size: 9px; opacity: .65; overflow-wrap: anywhere; }
+.inventory-dock__alt-copies { display: grid; gap: 3px; }
+.inventory-dock__alt-copy {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .03);
+  color: inherit;
+  font: inherit;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.inventory-dock__alt-copy:hover { background: rgba(255, 255, 255, .08); }
+.inventory-dock__alt-copy-line { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; font-size: 9px; }
+.inventory-dock__alt-copy-line em { font-style: normal; opacity: .7; }
+.inventory-dock__alt-copy-perks { font-size: 9px; opacity: .7; overflow-wrap: anywhere; }
+.inventory-dock__alt-community { border-top: 1px dashed rgba(255, 255, 255, .1); padding-top: 4px; }
+.inventory-dock__alt-community strong { font-size: 9px; color: #c4c9cd; }
+.inventory-dock__alt-community p { margin: 2px 0 0; font-size: 9px; opacity: .78; }
+.inventory-dock__alt-community-source { opacity: .65; }
+.inventory-dock__alt-error { margin: 0; color: #e6a0a0; font-size: 10px; }
+.inventory-dock__alt-ok { margin: 0; color: #9fd6a8; font-size: 10px; }
 `
 
 /**

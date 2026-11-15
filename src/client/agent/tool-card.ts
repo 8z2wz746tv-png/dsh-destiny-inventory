@@ -16,6 +16,14 @@ export function cardIntentOf(args: string): boolean {
   }
 }
 
+/** 平替/候选卡能接受的上下文最大年龄；超过就拒绝，不拿过期身份做排除。 */
+export const CONTEXT_MAX_AGE_MS = 5 * 60_000
+
+/** 上下文快照时间缺失或过旧。 */
+export function contextIsStale(observedAt: number | undefined, now = Date.now()): boolean {
+  return observedAt === undefined || observedAt <= 0 || now - observedAt > CONTEXT_MAX_AGE_MS
+}
+
 /** 工具明确返回 ok:false 是可读的错误，不是“解析失败”；原始结果里已经写清原因。 */
 export function toolRefusalOf(result: string): boolean {
   try {
