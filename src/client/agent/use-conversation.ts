@@ -33,6 +33,8 @@ export interface ConversationApi {
   account: AccountState | null
   /** 账号没能确认时给用户看的话；`null` 表示不用提示。 */
   blocker: string | null
+  /** 当前 Agent Session 的 id；没有 attach 时为 null。 */
+  sessionId: string | null
   /** 手动重试账号解析。**不轮询**——失败由用户决定要不要再试。 */
   retry(): void
 }
@@ -209,6 +211,7 @@ export function useConversation(
     view,
     /** 账号三态；`null` = 还在查。界面按它决定显示什么。 */
     account,
+    sessionId: adapter?.sessionId ?? null,
     blocker,
     /** 手动重试账号解析；不轮询。 */
     retry: () => setAttempt((n) => n + 1),

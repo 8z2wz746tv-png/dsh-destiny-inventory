@@ -4,7 +4,7 @@
  * 这些分支决定“解析失败”提示是否出现；compare/info 和可读错误不能被误报。
  */
 import { describe, expect, it } from 'vitest'
-import { cardIntentOf, toolRefusalOf } from '../src/client/agent/tool-card'
+import { CONTEXT_MAX_AGE_MS, cardIntentOf, contextIsStale, toolRefusalOf } from '../src/client/agent/tool-card'
 
 describe('cardIntentOf', () => {
   it('defaults a missing intent to analyze', () => {
@@ -41,5 +41,19 @@ describe('toolRefusalOf', () => {
   it('does not mark malformed result JSON', () => {
     expect(toolRefusalOf('not json')).toBe(false)
     expect(toolRefusalOf('')).toBe(false)
+  })
+})
+
+
+describe('contextIsStale', () => {
+  it('rejects a missing or zero snapshot time', () => {
+    expect(contextIsStale(undefined)).toBe(true)
+    expect(contextIsStale(0)).toBe(true)
+  })
+
+  it('accepts a recent snapshot and rejects one older than the cap', () => {
+    const now = 1_700_000_000_000
+    expect(contextIsStale(now - CONTEXT_MAX_AGE_MS + 1, now)).toBe(false)
+    expect(contextIsStale(now - CONTEXT_MAX_AGE_MS - 1, now)).toBe(true)
   })
 })

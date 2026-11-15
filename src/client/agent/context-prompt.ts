@@ -15,6 +15,10 @@ export interface ViewContextLike {
   selected?: {
     /** 实例 id；已由 host 上报，卡片用它标出“你选中的副本”。 */
     instanceId?: string
+    /** 物品 hash；平替候选按它排除当前武器整组，不依赖被截断的查询结果。 */
+    hash?: number
+    /** 这次上下文对应的快照时间；平替入口用它拒绝过期上下文。 */
+    observedAt?: number
     /** 领域类型；本轮只加这一个字段，旧上下文没有它也照常工作。 */
     kind?: 'weapon' | 'armor' | 'other'
     name?: string

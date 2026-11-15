@@ -41,6 +41,13 @@ describe('viewOf', () => {
       observedAt: AT,
     })
   })
+
+  it('refuses a selected identity when observed and clicked are different instances', () => {
+    const picked = { ...row, instanceId: 'i1', hash: 42 } as ItemRow
+    const observed = { ...row, instanceId: 'i2', hash: 99, name: '另一件' } as ItemRow
+    // instanceId 来自 observed、hash 来自 picked 时，会把两件武器拼成一个身份。
+    expect(viewOf('all', DEFAULT_FILTERS, selection(picked, observed), null).selected).toBeNull()
+  })
 })
 
 describe('P3 · 三种语义同时存在时，Agent 拿到的是三栏', () => {
